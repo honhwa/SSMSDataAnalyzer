@@ -14,8 +14,8 @@ Useful if you need to answer questions like:
 - *These two rows look the same — what's actually different between them?*
 
 It also adds a few things SSMS itself doesn't have: searching query results, peeking at a linked
-record, comparing rows side by side, adding up a selection, and turning a list of values into a
-SQL `IN (...)` clause.
+record, comparing rows side by side, adding up a selection, turning a list of values into a
+SQL `IN (...)` clause, and scripting the object under your cursor with **F12** or **Ctrl+click**.
 
 ## Everything it adds, at a glance
 
@@ -29,6 +29,7 @@ SQL `IN (...)` clause.
 | **Compare rows side by side** | Select rows in the results grid → right-click → **Pivot selected rows…** |
 | **Aggregate a selection** — COUNT, DISTINCT, SUM, AVERAGE, MIN, MAX | Select cells in the results grid → right-click → **Aggregate selection…** |
 | **Paste a list as `IN (...)`** | In a query window, right-click → **Paste as SQL IN (...)** |
+| **Script an object** — ALTER into a new window, or peek at its CREATE | In a query window, cursor on a table/view/procedure name → **F12**, or **Ctrl+click** the name |
 | **Settings** | **Tools → Options… → SSMS Data Analyzer** |
 | **Your own keyboard shortcuts** | **Tools → Options… → Environment → Keyboard** |
 
@@ -343,10 +344,48 @@ It handles the awkward bits for you:
 
 ---
 
+## Feature 7 — Script an object
+
+You're reading a query and want to see — or change — the view, procedure or table it uses,
+without hunting for it in Object Explorer.
+
+**Where:** in a query window, on any object name:
+
+| Do this | You get |
+|---|---|
+| Put the cursor on the name → **F12** | The object scripted **as ALTER** in a **new query window**, connected to the same server and database — ready to edit. It is **not run**. (Also: right-click → **Script object as ALTER**, or the **Tools** menu.) |
+| **Ctrl+click** the name | A small popup with the object's **CREATE** script. **Copy** puts the whole script on the clipboard; **Open in new query window** opens it (again, not run); **Esc** closes it. |
+
+It works like SSMS's own *Script … as* menu in Object Explorer, but straight from the name in
+your query:
+
+- **Any way the name is written** — `Orders`, `dbo.Orders`, `[Finances].[Accounting.Compensation.Correction.Item]`
+  (dots inside brackets are part of the name), `OtherDb.dbo.Orders`, `"quoted"` names. The cursor
+  can be anywhere in the name, including on the schema or a dot.
+- **Tables, types, synonyms and sequences have no ALTER** — F12 shows their CREATE script
+  instead, with a first line saying so: `-- Table has no ALTER form; CREATE script shown.`
+- **Tables include their keys, constraints, indexes and triggers**, like SSMS's *Script Table as
+  CREATE*. Permissions and dependent objects are left out.
+- **Which object is meant** is decided by SQL Server itself: a name without a schema finds the same
+  object your query would (your default schema first, then `dbo`). The status bar names the object
+  it scripted, so you can tell. A three-part name (`OtherDb.dbo.Orders`) looks in that database.
+- **Nothing to script** — a `@variable`, a `#temp` table, a keyword, or a name inside a comment or
+  a string — just gets a short explanation in the status bar. The same goes for an object that
+  doesn't exist (e.g. a column or alias name).
+- **Ctrl+click anywhere else** (blank space, keywords) and plain clicks behave exactly as before.
+- **F12 only changes inside query windows.** Everywhere else in SSMS it keeps its usual meaning.
+  To use a different key, see [Keyboard shortcuts](#keyboard-shortcuts).
+- Needs a **connected** query window. Microsoft Entra (MFA / token) connections aren't supported
+  yet — the status bar says so.
+
+---
+
 ## Keyboard shortcuts
 
-The extension ships with **no** default shortcuts, so it can't take a key you already use. You
-can add your own:
+The extension ships with **one** default shortcut: **F12 = Script object as ALTER**, and only
+inside SQL query windows (scope *SQL Query Editor*). To move or remove it, find
+`SsmsDataAnalyzer.ScriptObjectAsAlter` in the list below and change it there. Everything else has
+no default, so it can't take a key you already use. You can add your own:
 
 1. **Tools → Options… → Environment → Keyboard**
 2. Type `SsmsDataAnalyzer` in *Show commands containing* and pick a command.
@@ -362,6 +401,7 @@ can add your own:
 | Aggregate selection… | `SsmsDataAnalyzer.AggregateSelection` — uses the cells selected in the results grid |
 | Paste as SQL IN (...) | `SsmsDataAnalyzer.PasteAsSqlIn` |
 | Paste as numeric SQL IN (...) | `SsmsDataAnalyzer.PasteAsNumericSqlIn` |
+| Script object as ALTER | `SsmsDataAnalyzer.ScriptObjectAsAlter` — **F12** in query windows by default; uses the name at the cursor |
 
 ---
 
@@ -393,6 +433,8 @@ It only ever **reads**. It never writes, updates or deletes anything.
   before starting on a very large table. **Cancel** at any point keeps what it has so far.
 - **Go to source**, **Peek** and pivot links only read the table structure to find the link; the
   query they run selects just the linked record (or at most 1,000 rows for **Go to source table**).
+- **Script an object** only reads the object's definition (the same way SSMS's *Script as* does);
+  the script it opens is never run for you.
 - **Find**, **Pivot**, **Aggregate selection** and **Paste as SQL IN** work on what's already on
   your screen or clipboard — they don't query the database at all.
 - Your password is never stored or written anywhere, and cell values are never written to SSMS's

@@ -183,6 +183,22 @@
           <ToolTipText>Paste the clipboard's lines as an unquoted T-SQL IN list, for numbers.</ToolTipText>
         </Strings>
       </Button>
+
+      <!--
+        "Script object as ALTER" — F12 in a SQL query window scripts the object under the caret
+        (ALTER where one exists, CREATE otherwise) into a new query window. Statically visible
+        for the same cold-session reason as cmdidPasteAsSqlIn; Execute degrades to a status-bar
+        message when there is no object under the caret. See ScriptObject\ScriptObjectController.cs.
+      -->
+      <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidScriptObjectAsAlter" priority="0x0120" type="Button">
+        <Parent guid="guidSsmsDataAnalyzerCommandSet" id="QueryEditorMenuGroup" />
+        <Strings>
+          <ButtonText>Script object as ALTER</ButtonText>
+          <CanonicalName>SsmsDataAnalyzer.ScriptObjectAsAlter</CanonicalName>
+          <LocCanonicalName>SsmsDataAnalyzer.ScriptObjectAsAlter</LocCanonicalName>
+          <ToolTipText>Script the object under the caret as ALTER (CREATE when it has no ALTER form) into a new query window.</ToolTipText>
+        </Strings>
+      </Button>
     </Buttons>
 
     <Bitmaps>
@@ -216,7 +232,25 @@
     <CommandPlacement guid="guidSsmsDataAnalyzerCommandSet" id="cmdidAggregateSelection" priority="0x0225">
       <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
     </CommandPlacement>
+
+    <!-- "Script object as ALTER" Tools menu entry point, same CommandPlacement rule. -->
+    <CommandPlacement guid="guidSsmsDataAnalyzerCommandSet" id="cmdidScriptObjectAsAlter" priority="0x0230">
+      <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
+    </CommandPlacement>
   </CommandPlacements>
+
+  <!--
+    F12 = Script object as ALTER, ONLY in SSMS's "SQL Query Editor" key-binding scope: the
+    editor attribute is SSMS's own SQL Query Editor factory GUID (SQLEditors.pkgdef), so F12 keeps
+    its normal meaning (Edit.GoToDefinition) everywhere else. An editor-scoped binding outranks
+    the Global/Text Editor F12 binding while a query window is active, whatever keyboard scheme is
+    selected. Users can remove or move it under Tools > Options > Environment > Keyboard
+    (scope "SQL Query Editor"). ScriptObjectController also intercepts Edit.GoToDefinition inside
+    SQL query windows as a fallback (docs/script-object-api.md).
+  -->
+  <KeyBindings>
+    <KeyBinding guid="guidSsmsDataAnalyzerCommandSet" id="cmdidScriptObjectAsAlter" editor="guidSqlQueryEditorFactory" key1="VK_F12" />
+  </KeyBindings>
 
 
   <Symbols>
@@ -235,6 +269,7 @@
       <IDSymbol name="QueryEditorMenuGroup" value="0x1050" />
       <IDSymbol name="cmdidPasteAsSqlIn" value="0x0300" />
       <IDSymbol name="cmdidPasteAsNumericSqlIn" value="0x0301" />
+      <IDSymbol name="cmdidScriptObjectAsAlter" value="0x0302" />
     </GuidSymbol>
 
     <!--
@@ -247,6 +282,9 @@
       <IDSymbol name="IDM_SQLWB_SQLRESGRID_CONTEXT" value="0x0070" />
       <IDSymbol name="IDM_SQLWB_SQLFILE_CONTEXT" value="0x0050" />
     </GuidSymbol>
+
+    <!-- SSMS's "SQL Query Editor" editor factory (SQLEditors.pkgdef). Key-binding scope only. -->
+    <GuidSymbol name="guidSqlQueryEditorFactory" value="{B5A506EB-11BE-4782-9A18-21265C2CA0B4}" />
 
     <GuidSymbol name="guidImages" value="{d3f2a1b0-6c9e-4d7a-8b1c-5e2f9a0d4c11}">
       <IDSymbol name="bmpAnalyzeData" value="1" />

@@ -81,6 +81,9 @@ namespace SsmsDataAnalyzer.Vsix
     // starting size, Transient = true, MultiInstances stays at its default (0) since
     // AggregateSelectionCommand always shows/reuses id 0.
     [ProvideToolWindow(typeof(ResultsGrid.AggregateSelectionToolWindow), Style = VsDockStyle.Float, Width = 360, Height = 310, Transient = true)]
+    // "Script object" Ctrl+click popup — same "glance at it, close it" floating/transient shape as
+    // PeekToolWindow, sized for a script rather than a record.
+    [ProvideToolWindow(typeof(ScriptObject.ScriptObjectToolWindow), Style = VsDockStyle.Float, Width = 700, Height = 500, Transient = true)]
     [ProvideOptionPage(typeof(DataAnalyzerOptionsPage), "SSMS Data Analyzer", "General", 0, 0, true)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.NoSolution, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
@@ -115,6 +118,10 @@ namespace SsmsDataAnalyzer.Vsix
             // window — so it needs no capability probe and works on every SSMS 22 build.
             var commandService = await GetServiceAsync(typeof(System.ComponentModel.Design.IMenuCommandService)) as OleMenuCommandService;
             QueryEditor.PasteAsSqlInCommand.Register(this, commandService);
+
+            // "Script object": F12 (ALTER into a new query window) and Ctrl+click (CREATE popup)
+            // in SQL query windows. Same UI-thread context as Register.
+            ScriptObject.ScriptObjectController.Initialize(this, commandService);
 
             // Remember the text each query window actually executed, so Go to source and pivot
             // FK links describe what produced the grid, not whatever the editor holds by the
@@ -225,7 +232,8 @@ namespace SsmsDataAnalyzer.Vsix
         /// </summary>
         private async Task<QueryWindowOpenResult> TryOpenNewQueryWindowAsync(
             string sql, string connectionString,
-            Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo sourceConnectionInfo)
+            Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo sourceConnectionInfo,
+            bool allowAutoExecute)
         {
             Microsoft.Data.SqlClient.SqlConnection connection = null;
             try
@@ -336,13 +344,13 @@ namespace SsmsDataAnalyzer.Vsix
                     var confirmation = $"Opened a new query window on {csb.DataSource}/{csb.InitialCatalog}.";
                     var editorControl = FindSqlScriptEditorControl(activeDocument);
                     confirmation += EnsureConnected(editorControl, uiConnectionInfo, connection);
-                    confirmation += TryAutoExecute(editorControl);
+                    if (allowAutoExecute) confirmation += TryAutoExecute(editorControl);
                     OeDiagnostics.Info($"'Go to source' via ServiceCache.ScriptFactory.CreateNewBlankScript: {confirmation}");
                     return QueryWindowOpenResult.Ok(confirmation);
                 }
 
                 OeDiagnostics.Warn("'Go to source': ServiceCache.ScriptFactory resolved to null (IScriptFactory is not registered as a VS-wide global service in this session) — falling back to EnvDTE.");
-                return await TryOpenViaDteNewQueryAsync(sql, csb, connection).ConfigureAwait(true);
+                return await TryOpenViaDteNewQueryAsync(sql, csb, connection, allowAutoExecute).ConfigureAwait(true);
             }
             catch (Exception ex)
             {
@@ -372,7 +380,8 @@ namespace SsmsDataAnalyzer.Vsix
         /// cross-database FOREIGN KEY constraints), so this is never a guess.
         /// </summary>
         private async Task<QueryWindowOpenResult> TryOpenViaDteNewQueryAsync(
-            string sql, Microsoft.Data.SqlClient.SqlConnectionStringBuilder targetCsb, Microsoft.Data.SqlClient.SqlConnection connection)
+            string sql, Microsoft.Data.SqlClient.SqlConnectionStringBuilder targetCsb, Microsoft.Data.SqlClient.SqlConnection connection,
+            bool allowAutoExecute)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -495,7 +504,7 @@ namespace SsmsDataAnalyzer.Vsix
             // above — an unverified connection is exactly the case TryAutoExecute's own
             // IsConnected check cannot protect against (it could be "connected", just to the
             // wrong place), so this path stays unexecuted rather than risk it.
-            if (editorControl?.Connection != null)
+            if (allowAutoExecute && editorControl?.Connection != null)
             {
                 fallbackConfirmation += TryAutoExecute(editorControl);
             }
@@ -648,7 +657,7 @@ namespace SsmsDataAnalyzer.Vsix
             }
         }
 
-        private static Microsoft.SqlServer.Management.UI.VSIntegration.Editors.SqlScriptEditorControl FindSqlScriptEditorControl(EnvDTE.Document document)
+        internal static Microsoft.SqlServer.Management.UI.VSIntegration.Editors.SqlScriptEditorControl FindSqlScriptEditorControl(EnvDTE.Document document)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try

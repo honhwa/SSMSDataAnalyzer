@@ -44,6 +44,16 @@ namespace SsmsDataAnalyzer.Vsix
         /// as PeekToolWindow/GridFindToolWindow.</summary>
         public const string AggregateSelectionToolWindowPersistenceGuidString = "9d3b5f7a-1c4e-4a6d-8b2f-3e5a7c9d1b64";
         public static readonly Guid AggregateSelectionToolWindowPersistenceGuid = new Guid(AggregateSelectionToolWindowPersistenceGuidString);
+
+        /// <summary>Ctrl+click "Script object" popup — ScriptObjectToolWindow's persistence GUID.
+        /// Same single floating transient instance (id 0) shape as PeekToolWindow.</summary>
+        public const string ScriptObjectToolWindowPersistenceGuidString = "4b8e2d61-7a3c-4f95-b1d8-2c6e9a0f5d73";
+        public static readonly Guid ScriptObjectToolWindowPersistenceGuid = new Guid(ScriptObjectToolWindowPersistenceGuidString);
+
+        /// <summary>SSMS's own "SQL Query Editor" editor factory (Extensions\Application\SQLEditors.pkgdef,
+        /// [$RootKey$\Editors\{B5A506EB-...}]). Its GUID is the key-binding scope that keeps our F12
+        /// binding to SQL query windows only (VSCommandTable.vsct KeyBindings).</summary>
+        public const string SqlQueryEditorFactoryGuidString = "b5a506eb-11be-4782-9a18-21265c2ca0b4";
     }
 
     /// <summary>Numeric command/menu/group IDs used inside VSCommandTable.vsct.</summary>
@@ -89,5 +99,9 @@ namespace SsmsDataAnalyzer.Vsix
         public const int QueryEditorMenuGroup = 0x1050;
         public const int PasteAsSqlInCommandId = 0x0300;
         public const int PasteAsNumericSqlInCommandId = 0x0301;
+
+        /// <summary>"Script object as ALTER" (F12 in SQL query windows) — same query-editor
+        /// context-menu group as the paste commands, plus a Tools-menu CommandPlacement.</summary>
+        public const int ScriptObjectAsAlterCommandId = 0x0302;
     }
 }

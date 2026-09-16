@@ -29,9 +29,9 @@ namespace SsmsDataAnalyzer.Vsix.GoToSource
     internal static class QueryWindowAccessor
     {
         /// <summary>(sql text, ADO.NET connection string for the target server/database,
-        /// OPTIONAL real UIConnectionInfo to copy from — see TryOpenAsync) -> outcome, with a
-        /// real reason either way.</summary>
-        public static Func<string, string, Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo, Task<QueryWindowOpenResult>> TryOpenNewQueryWindowAsync { get; set; }
+        /// OPTIONAL real UIConnectionInfo to copy from — see TryOpenAsync, whether the Options
+        /// auto-execute setting may apply) -> outcome, with a real reason either way.</summary>
+        public static Func<string, string, Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo, bool, Task<QueryWindowOpenResult>> TryOpenNewQueryWindowAsync { get; set; }
 
         /// <param name="sourceConnectionInfo">
         /// v0.6.1 field report — the new window opened but showed "Disconnected.": decompiling
@@ -50,9 +50,12 @@ namespace SsmsDataAnalyzer.Vsix.GoToSource
         /// source" time only has a connection string) — the implementation falls back to
         /// hand-building, now with the previously-missing fields filled in.
         /// </param>
+        /// <param name="allowAutoExecute">False for text that must never run on its own (e.g. an
+        /// object's ALTER/CREATE script): the "Automatically execute" option is then ignored.</param>
         public static async Task<QueryWindowOpenResult> TryOpenAsync(
             string sql, string connectionString,
-            Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo sourceConnectionInfo = null)
+            Microsoft.SqlServer.Management.Smo.RegSvrEnum.UIConnectionInfo sourceConnectionInfo = null,
+            bool allowAutoExecute = true)
         {
             var handler = TryOpenNewQueryWindowAsync;
             if (handler == null)
@@ -60,7 +63,7 @@ namespace SsmsDataAnalyzer.Vsix.GoToSource
                 return QueryWindowOpenResult.Fail(
                     "the query-window opener was never wired up (DataAnalyzerPackage.InitializeQueryWindowAccessor did not run) — this points at a package initialization problem, not this specific action.");
             }
-            return await handler(sql, connectionString, sourceConnectionInfo).ConfigureAwait(true);
+            return await handler(sql, connectionString, sourceConnectionInfo, allowAutoExecute).ConfigureAwait(true);
         }
     }
 }

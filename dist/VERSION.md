@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.16.0**
+**`SsmsDataAnalyzer.vsix` — version 0.17.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -31,6 +31,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.17.0** — New: **script an object from the query editor.** Put the cursor on a table, view, procedure or function name and press **F12** — its ALTER script (CREATE for tables and other objects without ALTER) opens in a new query window, not executed. **Ctrl+click** a name to see its CREATE script in a popup with **Copy** and **Open in new query window**; **Esc** closes it. Names with dots inside brackets and three-part names work.
 
 **0.16.0** — **Go to source, Peek and pivot links now work on every grid when several statements run together** (e.g. three highlighted SELECTs → three grids). Each statement is matched to its own grid using SQL Server's own T-SQL parser. Still safe: if two statements return the same columns from different tables, it declines instead of guessing — which also fixes a case where the second grid could previously point at the first statement's table.
 
