@@ -8,7 +8,7 @@ namespace SsmsDataAnalyzer.Core.ResultShape
     /// described rows, is_hidden-filtered and ordinal-ordered.</summary>
     public sealed class MatchedBatch
     {
-        internal MatchedBatch(int batchIndex, IReadOnlyList<DescribedColumn> rows, int? statementNumber = null)
+        public MatchedBatch(int batchIndex, IReadOnlyList<DescribedColumn> rows, int? statementNumber = null)
         {
             BatchIndex = batchIndex;
             Rows = rows;
@@ -39,11 +39,19 @@ namespace SsmsDataAnalyzer.Core.ResultShape
         /// names and metadata only, never cell values.</summary>
         public IReadOnlyList<string> DiagnosticDumps { get; private set; } = new string[0];
 
+        /// <summary>Set only when this match came from reading the query TEXT instead of
+        /// sys.dm_exec_describe_first_result_set (see <see cref="StaticShapeResolver"/>): the
+        /// suffix every user-visible message about this match must carry. It quotes SQL Server's
+        /// own describe error, which can echo query text — status bar only, never logged.</summary>
+        public string StaticNote { get; private set; }
+
         public static ShapeMatch Declined(string message) =>
             new ShapeMatch { IsMatch = false, DeclineMessage = message ?? throw new ArgumentNullException(nameof(message)) };
 
         internal static ShapeMatch Matched(IReadOnlyList<MatchedBatch> matches) =>
             new ShapeMatch { IsMatch = true, Matches = matches };
+
+        internal void SetStaticNote(string note) => StaticNote = note;
 
         internal static ShapeMatch Declined(string message, IReadOnlyList<string> dumps) =>
             new ShapeMatch { IsMatch = false, DeclineMessage = message, DiagnosticDumps = dumps };
@@ -222,6 +230,33 @@ namespace SsmsDataAnalyzer.Core.ResultShape
             return ShapeMatch.Declined($"Go to source: none of the {countedTotal} statement(s) in the query that ran produced a result matching this grid's {numberOfDataColumns} columns{detail} — declined rather than risk the wrong table.", dumps);
         }
 
+        /// <summary>
+        /// Wraps statically-resolved rows (query text + sys.columns, see
+        /// <see cref="StaticShapeResolver"/>) as a <see cref="ShapeMatch"/> so that
+        /// <see cref="ResolveColumn"/>'s Amendment 17 agreement rule applies to them unchanged.
+        /// Two candidates of the SAME batch that produced identical rows count once, exactly as
+        /// in <see cref="MatchCandidates"/>.
+        /// </summary>
+        /// <param name="note">The user-visible suffix explaining that this came from the query
+        /// text; must be non-empty.</param>
+        public static ShapeMatch MatchedStatic(IReadOnlyList<MatchedBatch> matches, string note)
+        {
+            if (matches == null) throw new ArgumentNullException(nameof(matches));
+            if (matches.Count == 0) throw new ArgumentException("At least one match is required.", nameof(matches));
+            if (string.IsNullOrEmpty(note)) throw new ArgumentException("A static match must carry a note.", nameof(note));
+
+            var kept = new List<MatchedBatch>();
+            foreach (var m in matches)
+            {
+                if (kept.Any(k => k.BatchIndex == m.BatchIndex && SameDescribedRows(k.Rows, m.Rows))) continue;
+                kept.Add(m);
+            }
+
+            var result = ShapeMatch.Matched(kept);
+            result.SetStaticNote(note);
+            return result;
+        }
+
         private sealed class Classification
         {
             public readonly List<(int BatchIndex, List<DescribedColumn> Rows)> FullMatches = new List<(int, List<DescribedColumn>)>();
@@ -352,7 +387,11 @@ namespace SsmsDataAnalyzer.Core.ResultShape
             }
 
             if (described.SourceTable == null)
-                return ColumnSourceResolution.Decline($"Go to source: '{gridColumnName}' is a computed expression — it has no base table.");
+                return ColumnSourceResolution.Decline(described.IsStatic
+                    // Statically resolved: "computed expression" would be a lie — an unqualified
+                    // or aliased-away column reads exactly the same from here.
+                    ? $"Go to source: '{gridColumnName}' doesn't come from a single table in the query — declined rather than risk the wrong table."
+                    : $"Go to source: '{gridColumnName}' is a computed expression — it has no base table.");
 
             return ColumnSourceResolution.Success(described, match.Matches.Count);
         }
@@ -387,14 +426,19 @@ namespace SsmsDataAnalyzer.Core.ResultShape
         /// <summary>"SQL Server error 11525: The metadata could not be determined because …",
         /// trimmed. The real error replaces the old generic guess ("e.g. a selection or a later
         /// batch's temp table"), which left a field report undiagnosable.</summary>
-        private static string DescribeError(DescribedColumn errorRow)
+        public static string DescribeError(DescribedColumn errorRow) => DescribeError(errorRow, 200);
+
+        /// <summary><see cref="DescribeError(DescribedColumn)"/> with SQL Server's message cut
+        /// to <paramref name="maxMessageLength"/> characters (plus an ellipsis).</summary>
+        public static string DescribeError(DescribedColumn errorRow, int maxMessageLength)
         {
-            const int MaxMessageLength = 200;
+            int limit = Math.Max(1, maxMessageLength);
+            if (errorRow?.ErrorNumber == null) return "an unknown error";
             string text = "SQL Server error " + errorRow.ErrorNumber.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
             string message = errorRow.ErrorMessage?.Trim();
             if (!string.IsNullOrEmpty(message))
             {
-                if (message.Length > MaxMessageLength) message = message.Substring(0, MaxMessageLength) + "…";
+                if (message.Length > limit) message = message.Substring(0, limit) + "…";
                 text += ": " + message;
             }
             return text;

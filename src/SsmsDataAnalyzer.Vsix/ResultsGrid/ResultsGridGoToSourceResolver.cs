@@ -105,6 +105,11 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
         {
             public string DeclineMessage;
             public IReadOnlyList<ColumnLink> Columns = new ColumnLink[0];
+            /// <summary>Non-null when the sources came from the query TEXT rather than the
+            /// describe call (<see cref="StaticSourceResolution"/>): the suffix every message
+            /// about this map must carry. Status bar / banner only — it quotes SQL Server's
+            /// describe error, which can echo query text, so it is never logged.</summary>
+            public string StaticNote;
         }
 
         internal const string NoQueryTextMessage = "Go to source: no query text available.";
@@ -115,21 +120,25 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             var shape = await DescribeAndMatchAsync(
                 request.EditorConnectionString, request.EditorText, request.NumberOfDataColumns,
                 request.GridColumnNames, request.GridColumnOrdinal, request.GridColumnName,
+                request.BuildConnectionStringForDatabase,
                 describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
+
+            // Every message about a statically-resolved match (StaticSourceResolution) says so.
+            string note = shape.StaticNote ?? "";
 
             if (!shape.IsMatch)
                 return Decline(shape.DeclineMessage);
 
             var column = ResultShapeMatcher.ResolveColumn(shape, request.GridColumnOrdinal, request.GridColumnName);
             if (!column.Succeeded)
-                return Decline(column.DeclineMessage);
+                return Decline(column.DeclineMessage + note);
 
             var described = column.Described;
             var tableRef = SourceTableRef(described);
 
             var targetConnectionString = request.BuildConnectionStringForDatabase(described.SourceDatabase);
             if (targetConnectionString == null)
-                return Decline(CouldNotBuildTargetConnectionMessage);
+                return Decline(CouldNotBuildTargetConnectionMessage + note);
 
             using (var targetConn = new SqlConnection(targetConnectionString))
             {
@@ -141,18 +150,18 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
 
                 string fkDecline = CheckForeignKey(schema.Columns, described, tableRef, out var columnMeta);
                 if (fkDecline != null)
-                    return Decline(fkDecline);
+                    return Decline(fkDecline + note);
 
                 // v0.8.0: CellValue is the grid's DISPLAY TEXT (IGridStorage.GetCellDataAsString)
                 // — see docs/newer-grid-api.md. TryBuildJump both parses it back to a literal
                 // AND is where a NULL-vs-literal-"NULL" cell gets declined.
                 if (!TryBuildJump(columnMeta, described, request.GridColumnName, request.CellValue as string, column.MatchCount, out var sql, out var statusMessage))
-                    return Decline(statusMessage);
+                    return Decline(statusMessage + note);
 
                 return new Result
                 {
                     Success = true,
-                    StatusMessage = statusMessage,
+                    StatusMessage = statusMessage + note,
                     GeneratedSql = sql,
                     TargetConnectionString = targetConnectionString,
                     TargetQualifiedName = columnMeta.ReferencedQualifiedName
@@ -165,9 +174,12 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
         /// describe call per batch, one connection) and match each against the grid's full
         /// shape. Logs the full describe dumps when nothing matched (same as before the split).
         /// </summary>
+        /// <param name="buildConnectionStringForDatabase">Only used by the static (query-text)
+        /// fallback below; null disables it.</param>
         internal static async Task<ShapeMatch> DescribeAndMatchAsync(
             string editorConnectionString, string editorText, int numberOfDataColumns,
             IReadOnlyList<string> gridColumnNames, int clickedOrdinal, string clickedColumnName,
+            Func<string, string> buildConnectionStringForDatabase,
             int describeTimeoutSeconds, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(editorText))
@@ -206,6 +218,18 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
 
             var match = ResultShapeMatcher.MatchCandidates(candidateSet, described, numberOfDataColumns, gridColumnNames, clickedOrdinal, clickedColumnName);
 
+            // LAST RESORT, and only then: nothing described matched AND at least one candidate
+            // errored (typically a session #temp table our connection can't see). Reading the
+            // source out of the query text can still give the permanent tables' columns links.
+            // A successful describe is never replaced — this runs only under !IsMatch.
+            if (!match.IsMatch && buildConnectionStringForDatabase != null)
+            {
+                var staticMatch = await StaticSourceResolution.TryResolveAsync(
+                    candidateSet, described, gridColumnNames, buildConnectionStringForDatabase,
+                    describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
+                if (staticMatch != null) return staticMatch;
+            }
+
             // v0.7.5: the full dump stays one ActivityLog away even when the status bar
             // message can't carry all of it. Column names/metadata only, never cell values.
             foreach (var dump in match.DiagnosticDumps)
@@ -238,11 +262,12 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             int columnCount = gridColumnNames.Count;
             var shape = await DescribeAndMatchAsync(
                 editorConnectionString, editorText, columnCount, gridColumnNames, 0, null,
-                describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
+                buildConnectionStringForDatabase, describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
 
             if (!shape.IsMatch)
                 return new ColumnLinkMap { DeclineMessage = shape.DeclineMessage };
 
+            string note = shape.StaticNote ?? "";
             var columns = new ColumnLink[columnCount];
             for (int i = 0; i < columnCount; i++)
             {
@@ -327,7 +352,15 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            return new ColumnLinkMap { Columns = columns };
+
+            // Every decline the user can read must say where the answer came from.
+            if (note.Length > 0)
+            {
+                foreach (var c in columns)
+                    if (c.DeclineMessage != null) c.DeclineMessage += note;
+            }
+
+            return new ColumnLinkMap { Columns = columns, StaticNote = shape.StaticNote };
         }
 
         /// <summary>Stage 3 check: the described base column must exist on its table and carry

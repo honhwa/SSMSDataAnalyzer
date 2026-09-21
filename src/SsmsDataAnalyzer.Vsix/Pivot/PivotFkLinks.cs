@@ -82,7 +82,7 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
 
                 return map.DeclineMessage != null
                     ? PivotFkLinkMap.Declined(this, map.DeclineMessage)
-                    : PivotFkLinkMap.Resolved(this, map.Columns);
+                    : PivotFkLinkMap.Resolved(this, map.Columns, map.StaticNote);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
@@ -142,10 +142,11 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
         private readonly PivotFkLinks _owner;
         private readonly IReadOnlyList<ResultsGridGoToSourceResolver.ColumnLink> _columns;
 
-        private PivotFkLinkMap(PivotFkLinks owner, string declineReason, IReadOnlyList<ResultsGridGoToSourceResolver.ColumnLink> columns)
+        private PivotFkLinkMap(PivotFkLinks owner, string declineReason, IReadOnlyList<ResultsGridGoToSourceResolver.ColumnLink> columns, string staticNote = null)
         {
             _owner = owner;
             DeclineReason = declineReason;
+            StaticNote = staticNote;
             _columns = columns ?? new ResultsGridGoToSourceResolver.ColumnLink[0];
             int count = 0;
             foreach (var c in _columns) if (c.IsLink) count++;
@@ -153,7 +154,12 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
         }
 
         internal static PivotFkLinkMap Declined(PivotFkLinks owner, string reason) => new PivotFkLinkMap(owner, reason, null);
-        internal static PivotFkLinkMap Resolved(PivotFkLinks owner, IReadOnlyList<ResultsGridGoToSourceResolver.ColumnLink> columns) => new PivotFkLinkMap(owner, null, columns);
+        internal static PivotFkLinkMap Resolved(PivotFkLinks owner, IReadOnlyList<ResultsGridGoToSourceResolver.ColumnLink> columns, string staticNote = null) => new PivotFkLinkMap(owner, null, columns, staticNote);
+
+        /// <summary>Non-null when the sources were read from the query TEXT because SQL Server
+        /// could not describe the query (a session #temp table, typically). Drives the banner's
+        /// wording; it quotes SQL Server's error, so it is shown but never logged.</summary>
+        public string StaticNote { get; }
 
         /// <summary>Whole-pivot failure, in Go to source's wording (starts with "Go to source: ").
         /// Null when resolution succeeded — even if no column turned out to be a link. Contains
@@ -242,7 +248,9 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
 
                 var c = Get(gridOrdinal);
                 if (c == null) { declineMessage = "Go to source: could not match this column to the described query."; declineIsLoggable = true; return null; }
-                if (!c.IsLink) { declineMessage = c.DeclineMessage; declineIsLoggable = true; return null; }
+                // A statically-resolved decline carries SQL Server's describe error, which can
+                // quote the query text — status bar only in that case.
+                if (!c.IsLink) { declineMessage = c.DeclineMessage; declineIsLoggable = StaticNote == null; return null; }
 
                 // Same order as ResolveAsync(Request): target connection, then the literal.
                 string targetConnectionString = _owner.BuildConnectionStringForDatabase(c.Described.SourceDatabase);
@@ -256,14 +264,14 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
                 if (!ResultsGridGoToSourceResolver.TryBuildJump(c.ForeignKeyColumn, c.Described, c.GridColumnName, cellDisplayText, c.MatchCount, out var sql, out var statusMessage))
                 {
                     // The formatter's decline can quote the display text: status bar only, never logged.
-                    declineMessage = statusMessage;
+                    declineMessage = statusMessage + (StaticNote ?? "");
                     declineIsLoggable = false;
                     return null;
                 }
 
                 declineMessage = null;
                 declineIsLoggable = false;
-                return new PeekRequest(sql, targetConnectionString, statusMessage, c.ForeignKeyColumn.ReferencedQualifiedName);
+                return new PeekRequest(sql, targetConnectionString, statusMessage + (StaticNote ?? ""), c.ForeignKeyColumn.ReferencedQualifiedName);
             }
             catch (Exception ex)
             {

@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.17.0**
+**`SsmsDataAnalyzer.vsix` — version 0.18.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -31,6 +31,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.18.0** — **Go to source, Peek and pivot links now work on queries that use a #temp table** (or anything else SQL Server can't describe from outside your session). The extension reads your query's own `alias.Column` list and FROM clause to find which real table each column comes from; temp-table columns, expressions and `SELECT *` still get no link. The status bar says when an answer came from the query text.
 
 **0.17.0** — New: **script an object from the query editor.** Put the cursor on a table, view, procedure or function name and press **F12** — its ALTER script (CREATE for tables and other objects without ALTER) opens in a new query window, not executed. **Ctrl+click** a name to see its CREATE script in a popup with **Copy** and **Open in new query window**; **Esc** closes it. Names with dots inside brackets and three-part names work.
 

@@ -28,5 +28,11 @@ namespace SsmsDataAnalyzer.Core.ResultShape
         /// <summary>Declared max_length in bytes, -1 for a MAX/LOB type. Used to decline
         /// converting a possibly-truncated-for-display string back to a literal.</summary>
         public int MaxLength { get; set; }
+
+        /// <summary>True when this row was NOT produced by the DM but reconstructed from the
+        /// query TEXT (<see cref="StaticShapeResolver"/> + a sys.columns lookup), because the
+        /// describe call could not compile the query — typically a session #temp table. Only
+        /// changes the wording of messages; every downstream rule is identical.</summary>
+        public bool IsStatic { get; set; }
     }
 }

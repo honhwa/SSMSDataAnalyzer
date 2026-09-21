@@ -398,6 +398,9 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
                 else if (_fkLinkMap.LinkColumnCount > 0)
                 {
                     suffix = string.Format(CultureInfo.InvariantCulture, " · {0} FK links", _fkLinkMap.LinkColumnCount);
+                    // Say when the links came from reading the query text rather than from
+                    // SQL Server's metadata (a session #temp table it couldn't describe).
+                    if (_fkLinkMap.StaticNote != null) suffix += _fkLinkMap.StaticNote;
                 }
             }
 
