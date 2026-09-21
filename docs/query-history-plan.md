@@ -55,7 +55,7 @@ What we deliberately do differently:
 ## 3. Storage (decision D1)
 
 - **Location:** per-user, at `%LOCALAPPDATA%\SsmsDataAnalyzer\QueryHistory\`. Never roaming.
-- **Recommendation: append-only JSON Lines, one file per month.** The file names look like
+- **Decided: append-only JSON Lines, one file per month.** The file names look like
   `2026-09.jsonl`. Starring and deleting are written to a small `edits.jsonl` sidecar. At
   startup, a background load builds an in-memory index.
   - Zero extra DLLs, and crash-safe: a torn last line is simply skipped on the next load.
