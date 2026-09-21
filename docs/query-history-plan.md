@@ -59,7 +59,8 @@ What we deliberately do differently:
   `2026-09.jsonl`. Starring and deleting are written to a small `edits.jsonl` sidecar. At
   startup, a background load builds an in-memory index.
   - Zero extra DLLs, and crash-safe: a torn last line is simply skipped on the next load.
-  - Easy to inspect or delete by hand.
+  - Easy to delete by hand. Not readable by hand: every line is encrypted (see
+    "Protection at rest" below).
   - At the expected volume (tens of thousands of executions), in-memory search is instant.
 - **Why not SQLite, as Redgate uses:** SSMS already loads other copies of SQLitePCLRaw
   (Roslyn language services, Copilot). Shipping our own copy into the same process risks
@@ -70,20 +71,80 @@ What we deliberately do differently:
 - **Size cap:** texts longer than 1 MB are stored truncated, with a marker. That protects
   against huge scripts.
 
-### Privacy and safety
+### Privacy and safety (user requirement, 2026-09-21)
 
-- **The history holds your query text, including any literal values in it.** It is stored
-  only on your machine, in your own user profile. The README must say this plainly. This is a
-  user-requested store, not a log. The extension's "nothing in logs" rule is unchanged:
-  OeDiagnostics still never receives query text.
-- **Password redaction.** Before saving, literals are replaced with `'***'`. This covers
-  literals after `PASSWORD =` in `CREATE/ALTER LOGIN`, `CREATE USER … WITH PASSWORD`,
-  `CREATE CREDENTIAL … SECRET =`, `CREATE MASTER KEY / CERTIFICATE … BY PASSWORD`, and
-  `sp_addlogin` / `sp_password` arguments. The ScriptDom tokenizer does this reliably.
-- **Options:**
-  - *Enable query history*, on by default.
-  - *Retention (days)*.
-  - *Clear all history* (with confirmation), inside the window.
+**The risk:** DBAs type passwords into queries, for example `CREATE LOGIN … WITH PASSWORD = '…'`
+or `sp_addlinkedsrvlogin`. If someone gets at the PC, or copies the profile folder, a plain
+history file would hand them every password and every literal value ever run. So the history
+gets several independent layers. Any one of them is enough to stop a copied file from being
+readable.
+
+**Layer 1: encrypted at rest.**
+- Every entry is encrypted before it touches the disk.
+- The algorithm is AES-256-CBC plus HMAC-SHA256 (encrypt-then-MAC). Each entry gets its own
+  random IV. A JSONL line is `v1:<base64 IV|ciphertext|MAC>`. There is no plaintext field,
+  so even server and database names are encrypted.
+- The 64-byte key (32 bytes for AES, 32 for the MAC) is generated once with
+  `RandomNumberGenerator`.
+- The key is stored only DPAPI-protected: `ProtectedData.Protect`, scope CurrentUser, with
+  fixed extra entropy, in `QueryHistory\key.bin`. DPAPI ties it to the Windows user's login
+  secret. The key never exists in plaintext on disk.
+- **Effect:**
+  - A stolen history folder, a copied disk or a backup are all unreadable on another machine
+    or under another Windows account.
+  - Even a local admin can't read it without the user's Windows credentials (or an attack on
+    the logged-in session).
+- **Speed:** there is one DPAPI call at load. After that, AES runs per line, which is fast
+  (tens of thousands of entries load in well under a second, on a background thread).
+- **Tampering:** an entry that fails its MAC check is skipped, not shown. A missing or
+  undecryptable key means history is simply empty, and a new key is created.
+- Everything used is in .NET Framework 4.7.2 (`System.Security.Cryptography` +
+  `System.Security.dll` ProtectedData), so nothing extra is shipped.
+
+**Layer 2: secrets never written, even encrypted.**
+- The ScriptDom tokenizer finds the secret literals before saving and replaces them with
+  `'***'`. This covers:
+  - `PASSWORD = '…'` in `CREATE/ALTER LOGIN`, `CREATE/ALTER USER … WITH PASSWORD`,
+    `CREATE/ALTER APPLICATION ROLE`
+  - `CREATE/ALTER MASTER KEY / CERTIFICATE / SYMMETRIC KEY … BY PASSWORD`,
+    `OPEN MASTER KEY / SYMMETRIC KEY … DECRYPTION BY PASSWORD`
+  - `CREATE/ALTER CREDENTIAL … SECRET = '…'`, `CREATE DATABASE SCOPED CREDENTIAL … SECRET`
+  - `BACKUP/RESTORE … PASSWORD / MEDIAPASSWORD`
+  - stored procedures: `sp_addlogin`, `sp_password`, `sp_addlinkedsrvlogin`
+    (`@rmtpassword`), `sp_addapprole`, `sp_setapprole`, `sp_control_dbmasterkey_password`
+  - `OPENROWSET` / `OPENDATASOURCE` connection strings: `Password=` / `PWD=` inside the string
+    literal
+- If a secret-bearing statement can't be parsed safely (for example the tokenizer isn't
+  available), the whole entry is saved as the placeholder
+  `-- [query not saved: it contained a password or secret]` rather than risk leaking it.
+- Unit tests cover every pattern above, including mixed case, N'…' literals, escaped quotes
+  and comments between tokens.
+
+**Layer 3: the user decides.**
+- *Enable query history*: on by default. When turned off, nothing is written.
+- *Don't record queries that contain passwords or secrets*: on by default. With it on, those
+  executions are skipped entirely, not just redacted. Off means they're recorded with the
+  redacted `'***'` form.
+- *Excluded servers*: a comma-separated list, for example production servers, that are never
+  recorded.
+- *Retention (days)*, default 30.
+- **Clear all history** in the window, with confirmation. It deletes the key first
+  (crypto-shred: every existing file becomes unreadable instantly, even if file deletion is
+  interrupted or the disk keeps old sectors), then the files.
+
+**Layer 4: file hygiene.**
+- The folder is created with an explicit ACL: only the current user plus SYSTEM, inheritance
+  disabled. That holds even if `%LOCALAPPDATA%` was redirected somewhere looser.
+- Nothing goes to a temp file, and nothing plaintext is written during trimming. Old entries
+  are re-encrypted into a new file, which is then swapped in.
+- Decrypted text lives only in memory while SSMS runs. OeDiagnostics never gets query text
+  (the unchanged project rule).
+
+**What this does NOT protect against, stated in the README:**
+- someone using the PC while you are logged in
+- malware running as you
+
+In both cases, the query window itself is just as exposed.
 
 ## 4. Features by phase
 
@@ -120,7 +181,7 @@ What we deliberately do differently:
    - **Copy:** Ctrl+C copies the selected entries' text.
    - **Star / unstar**, **Delete**.
    - Double-click = Open in new query window.
-7. **Options page:** *Enable query history*, *Retention (days)*.
+7. **Options page:** *Enable query history*, *Don't record queries that contain passwords or secrets*, *Excluded servers*, *Retention (days)* (see §3 "Privacy and safety").
 
 ### Phase 2 — toolbar + polish
 
@@ -154,6 +215,7 @@ What we deliberately do differently:
 | `HistoryStore`: append queue, month files, edits sidecar, load index, retention trim | Core/History (file I/O through an interface for tests) | ✅ unit, with a temp folder |
 | `HistoryQuery`: prefix parser + filter + sort | Core/History | ✅ unit |
 | `SecretRedactor`: password/secret literal masking | Core/History (token based; the ScriptDom token list comes from Vsix) | ✅ unit |
+| `HistoryCipher`: AES-256-CBC + HMAC-SHA256 per entry; key via an `IKeyProtector` (DPAPI in Vsix, fake in tests) | Core/History (+ DPAPI adapter in Vsix) | ✅ unit (round-trip, tamper → skipped, wrong key → skipped) |
 | Capture hook (extends `ExecutedQueryTextTracker`) and the execution-completed listener | Vsix/History | manual |
 | `QueryHistoryToolWindow` + view/view model | Vsix/History | manual |
 | Commands, toolbar, options | .vsct, PackageGuids, DataAnalyzerPackage, Options | manual |
@@ -215,6 +277,6 @@ Exact signatures get fixed in this section before H1/H2 start.
 | D2 | Default retention | 30 days, starred entries kept forever |
 | D3 | Record executions only, or also unsaved edits like Redgate? | Executions only |
 | D4 | Group identical texts by default? | Off by default, toggle in the window |
-| D5 | Password/secret redaction | On, always |
+| D5 | Password/secret handling | **Decided (user requirement):** four layers. Encrypted at rest (AES + DPAPI-protected key); secrets redacted before saving; queries with secrets skipped by default; excluded-servers list; crypto-shred on Clear all; user-only folder ACL |
 | D6 | Import Redgate `SqlHistory.db` | Phase 3, only if you want it |
 | D7 | Window style | Dockable, persistent tool window (not a popup) |
