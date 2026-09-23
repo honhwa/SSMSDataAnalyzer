@@ -436,6 +436,50 @@ namespace SsmsDataAnalyzer.Vsix.History
 
         /// <summary>"Clear all history" (docs/query-history-plan.md §3 "Layer 2") -- the
         /// caller (code-behind) is responsible for the confirmation prompt before calling this.</summary>
+        /// <summary>
+        /// docs/query-history-plan.md §4 Phase 3 item 13: writes the list exactly as it is
+        /// currently filtered to a .sql file. The caller confirms first -- this is the one
+        /// operation that takes history OUT of the encrypted store, and the resulting file is
+        /// plain text with the queries (passwords included) exactly as they were run.
+        /// </summary>
+        public bool ExportToFile(string path)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var entries = new List<HistoryEntry>(Items.Count);
+                foreach (var item in Items) entries.Add(item.Entry);
+
+                string script = HistoryExport.ToSqlScript(entries, DateTime.Now, DescribeFilter());
+
+                // UTF-8 with BOM: SSMS opens .sql files as ANSI without one, which mangles any
+                // non-ASCII literal in an exported query.
+                System.IO.File.WriteAllText(path, script, new System.Text.UTF8Encoding(true));
+
+                StatusText = entries.Count == 1
+                    ? "Exported 1 entry."
+                    : "Exported " + entries.Count.ToString(CultureInfo.InvariantCulture) + " entries.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Never the path or the script in the log -- both can carry sensitive text.
+                ObjectExplorer.OeDiagnostics.Error("Query history: export failed (" + ex.GetType().Name + ").");
+                StatusText = "Export failed: " + ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>What the exported file says it contains. Search text is the user's own
+        /// words and can name a database or server, which is fine in a file they chose to
+        /// write -- it is never logged.</summary>
+        private string DescribeFilter()
+        {
+            string range = SelectedDateRange?.Text ?? "All";
+            string search = string.IsNullOrWhiteSpace(SearchText) ? "(no search)" : SearchText;
+            return search + "   |   " + range + (GroupIdenticalText ? "   |   grouped by identical text" : string.Empty);
+        }
+
         public void ClearAll()
         {
             ThreadHelper.ThrowIfNotOnUIThread();

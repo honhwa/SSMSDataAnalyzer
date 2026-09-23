@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.20.0**
+**`SsmsDataAnalyzer.vsix` — version 0.21.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.21.0** — Query History: **Export…** saves the list exactly as you have it filtered to a `.sql` file, one block per query with the server, database and time as a comment above it. It warns first, because the exported file is **not** encrypted — unlike the history itself, it holds the queries in plain text, passwords included.
 
 **0.20.0** — **Query History, part 2.** A **toolbar**: switch on *SSMS Data Analyzer* under **View → Toolbars** for a one-click Query History button. **Group identical** (a checkbox, off by default) collapses repeated runs of the same text into one row showing how many times you ran it (×3). New **right-click menu** on a row: Open in new query window, Insert at cursor, Copy, **Copy with header** (server, database and time as comment lines above the query), Star/unstar, Delete, and **Find entries for this database**. Copy and Copy with header now take **every selected row**, separated by `GO`. New **Document** column, plus two search prefixes: `doc:SQLQuery3` and **`closed:true`** — the queries you ran in a tab you have since closed.
 

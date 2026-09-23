@@ -432,6 +432,11 @@ single row, showing the most recent one and how many times you ran it (×3). It 
 **The toolbar:** switch on **SSMS Data Analyzer** under **View → Toolbars** for a Query History
 button you can reach in one click.
 
+**Export…** writes the list, exactly as you have it filtered, to a `.sql` file — one block per
+query with the server, database and time as a comment above it. It asks first: that file is
+**not** encrypted, so unlike the history itself it holds the queries in plain text, passwords
+included. Put it somewhere you would put a password.
+
 ### Your history is encrypted
 
 DBAs type passwords into queries — `CREATE LOGIN … WITH PASSWORD = '…'` and the like. A plain

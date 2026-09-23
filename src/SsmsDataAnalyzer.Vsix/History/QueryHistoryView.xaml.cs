@@ -149,6 +149,47 @@ namespace SsmsDataAnalyzer.Vsix.History
             }
         }
 
+        /// <summary>"Export...": the filtered list as a .sql file. Confirms first, because the
+        /// file leaves the encrypted store -- everything the encryption protects is in plain
+        /// text once it is written (docs/query-history-plan.md §3).</summary>
+        private void ExportButton_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (ViewModel.Items.Count == 0)
+            {
+                MessageBox.Show(Window.GetWindow(this), "There is nothing to export: no entries match the current filter.",
+                    "Export query history", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                Window.GetWindow(this),
+                "The exported .sql file is NOT encrypted. It will contain these queries exactly as you ran them, "
+                + "including any passwords typed into them, readable by anyone who can open the file."
+                + Environment.NewLine + Environment.NewLine
+                + "Export anyway?",
+                "Export query history",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Export query history",
+                Filter = "SQL script (*.sql)|*.sql|All files (*.*)|*.*",
+                DefaultExt = ".sql",
+                FileName = "QueryHistory-" + DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".sql",
+                OverwritePrompt = true
+            };
+
+            if (dialog.ShowDialog(Window.GetWindow(this)) == true)
+            {
+                ViewModel.ExportToFile(dialog.FileName);
+            }
+        }
+
         /// <summary>"Clear all history", with confirmation (docs/query-history-plan.md §3
         /// "Layer 2" -- the crypto-shred is destructive and irreversible).</summary>
         private void ClearAllButton_Click(object sender, RoutedEventArgs e)

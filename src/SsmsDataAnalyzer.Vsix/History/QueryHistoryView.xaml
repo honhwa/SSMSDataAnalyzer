@@ -145,6 +145,8 @@
                         IsEnabled="{Binding HasSelection}" Click="StarButton_Click" />
                 <Button Style="{StaticResource QhToolbarButton}" Content="Delete"
                         IsEnabled="{Binding HasSelection}" Click="DeleteButton_Click" />
+                <Button Style="{StaticResource QhToolbarButton}" Content="Export..." Click="ExportButton_Click"
+                        ToolTip="Save the list as it is currently filtered to a .sql file (not encrypted)" />
                 <Button Style="{StaticResource QhToolbarButton}" Content="Clear all history..." Click="ClearAllButton_Click" />
             </StackPanel>
         </DockPanel>
