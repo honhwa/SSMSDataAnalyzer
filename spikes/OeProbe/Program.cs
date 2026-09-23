@@ -42,6 +42,7 @@ internal static class Program
                 case "survey": Survey(files, opts); break;
                 case "il": foreach (var f in Expand(files)) IlDump.Run(f, opts); break;
                 case "res": foreach (var f in Expand(files)) ResDump.Run(f, opts); break;
+                case "listres": ResReader.Run(files[0], opts); break;
                 default: Console.Error.WriteLine("unknown verb " + verb); return 1;
             }
         }

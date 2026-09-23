@@ -222,6 +222,21 @@ In both cases, the query window itself is just as exposed.
 - **S-4 ExecuteCurrentStatement.** Confirm which text actually runs for
   "Execute current statement", and how to get it.
 
+### 6.1 Spike answers and the lead's decisions (2026-09-23)
+
+Full report: [docs/query-history-api.md](query-history-api.md). Summary and what we do about it:
+
+| # | Answer | Confidence | Decision |
+|---|---|---|---|
+| S-1 | A real completion signal exists (`ScriptExecutionCompleted` with an outcome enum, and a batch row count), but only through two hops of reflection onto private fields of internal types. DTE `AfterExecute` is proven useless: IL shows execution is started asynchronously, so it fires before any result exists. | MEDIUM | **Optional, feature-detected.** Phase 1 records the entry at execute time with duration/outcome empty, and a separate guarded listener fills them in if — and only if — the reflection succeeds on this build. One failure disables it for the session, logs a single value-free line, and nothing else changes. No feature may depend on it. |
+| S-2 | The SQL Editor toolbar's group ID lives in the compressed `CFCT` menu blob and cannot be read, the same wall the results-grid spike hit. | LOW for the caption | **Our own toolbar only** (View → Toolbars → SSMS Data Analyzer), which is the supported route and cannot break. The `CommandBars["SQL Editor"]` by-name attempt is Phase 2 and strictly best-effort. |
+| S-3 | Already solved: `QueryWindowAccessor.TryOpenAsync` / `TryOpenNewQueryWindowAsync` is exactly the recommended Option A, shipped since v0.5.0. | HIGH | Reuse it as-is. Only a "is there already an open window on this server and login" helper is new. |
+| S-4 | Plain `Query.Execute` is confirmed to run selection-or-whole-document, as the existing tracker assumes. For `ExecuteCurrentStatement` no statement-splitting code path could be found, and the search was inconclusive. | HIGH / LOW | **Don't guess.** Capture what the tracker already captures. When the command was `ExecuteCurrentStatement` and we cannot prove which statement ran, the entry is still recorded — it may hold more text than actually ran, which is honest and harmless for a history. Revisit after a live check. |
+
+The two LOW/MEDIUM answers are both things this environment cannot verify without a running
+SSMS, so the standing rule applies with extra force: build the `.vsix` and check live before
+anything is built on top of them.
+
 ## 7. Team (low token use, same model as the pivot)
 
 | Agent | Model | Owns | Why |
