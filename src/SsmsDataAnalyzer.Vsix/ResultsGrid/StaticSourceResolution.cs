@@ -41,7 +41,8 @@ SELECT DB_NAME() AS database_name, SCHEMA_NAME(o.schema_id) AS schema_name, o.na
 FROM sys.objects AS o
 JOIN sys.columns AS c ON c.object_id = o.object_id
 LEFT JOIN sys.types AS t ON t.system_type_id = c.system_type_id AND t.user_type_id = t.system_type_id
-WHERE o.object_id = @id AND o.type = 'U';";
+WHERE o.object_id = @id AND o.type = 'U'
+ORDER BY c.column_id;";
 
         /// <summary>The note is a suffix on an already-complete status message: keep SQL
         /// Server's text short (the full error is in the pre-static decline anyway).</summary>
@@ -56,6 +57,11 @@ WHERE o.object_id = @id AND o.type = 'U';";
             /// (more than one only in a case-sensitive database).</summary>
             public readonly Dictionary<string, List<DescribedColumn>> Columns =
                 new Dictionary<string, List<DescribedColumn>>(StringComparer.OrdinalIgnoreCase);
+
+            /// <summary>Column names in catalog (column_id) order -- what "SELECT alias.*"
+            /// expands to. Order is the whole point here, so this is a list, not the dictionary
+            /// above.</summary>
+            public readonly List<string> Ordered = new List<string>();
 
             /// <summary>The exact-case column if there is one, else the only case-insensitive
             /// match; null when absent or ambiguous (never pick one of two).</summary>
@@ -91,6 +97,10 @@ WHERE o.object_id = @id AND o.type = 'U';";
             DescribedColumn firstError = null;
             var staticMatches = new List<(DescribeCandidate Candidate, IReadOnlyList<StaticColumnSource> Columns)>();
 
+            // Tables already read for star expansion, shared across candidates and reused as the
+            // seed of the catalog load below, so no table is fetched twice.
+            var starColumns = new Dictionary<string, TableColumns>(StringComparer.Ordinal);
+
             for (int i = 0; i < candidates.Count; i++)
             {
                 // Rule 1: only a candidate whose describe returned an error row.
@@ -98,7 +108,16 @@ WHERE o.object_id = @id AND o.type = 'U';";
                 if (errorRow == null) continue;
 
                 var shape = ScriptDomStaticShapeParser.Parse(candidates[i].Text);
-                var result = StaticShapeResolver.Resolve(shape, gridColumnNames);
+
+                // "SELECT FA.*, x, y" is the commonest shape a #temp query takes, and the text
+                // alone cannot say how many columns FA.* is. The catalog can: read the table's
+                // columns in declaration order and expand. This never loosens the safety rule --
+                // the expanded list still has to match the grid's headers one-for-one below, so
+                // a table that has changed since the query ran fails that check and declines.
+                var expander = await BuildStarExpanderAsync(
+                    shape, starColumns, buildConnectionStringForDatabase, timeoutSeconds, cancellationToken).ConfigureAwait(true);
+
+                var result = StaticShapeResolver.Resolve(shape, gridColumnNames, expander);
                 if (!result.IsMatch) continue;
 
                 staticMatches.Add((candidates[i], result.Columns));
@@ -109,7 +128,7 @@ WHERE o.object_id = @id AND o.type = 'U';";
 
             var catalog = await LoadCatalogAsync(
                 staticMatches.SelectMany(m => m.Columns).Where(c => c.HasSource).ToList(),
-                buildConnectionStringForDatabase, timeoutSeconds, cancellationToken).ConfigureAwait(true);
+                buildConnectionStringForDatabase, timeoutSeconds, cancellationToken, starColumns).ConfigureAwait(true);
 
             var matched = new List<MatchedBatch>();
             bool anySource = false;
@@ -168,9 +187,14 @@ WHERE o.object_id = @id AND o.type = 'U';";
             IReadOnlyList<StaticColumnSource> sources,
             Func<string, string> buildConnectionStringForDatabase,
             int timeoutSeconds,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            IReadOnlyDictionary<string, TableColumns> alreadyLoaded = null)
         {
             var catalog = new Dictionary<string, TableColumns>(StringComparer.Ordinal);
+            if (alreadyLoaded != null)
+            {
+                foreach (var pair in alreadyLoaded) catalog[pair.Key] = pair.Value;
+            }
 
             var byDatabase = sources
                 .GroupBy(s => s.Database ?? string.Empty, StringComparer.OrdinalIgnoreCase);
@@ -202,6 +226,7 @@ WHERE o.object_id = @id AND o.type = 'U';";
                         foreach (var table in tables)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
+                            if (catalog.ContainsKey(table.Key)) continue; // already read for star expansion
                             var loaded = await LoadTableAsync(connection, table.Source, timeoutSeconds, cancellationToken).ConfigureAwait(true);
                             if (loaded != null) catalog[table.Key] = loaded;
                         }
@@ -247,6 +272,7 @@ WHERE o.object_id = @id AND o.type = 'U';";
                         }
 
                         string columnName = reader.GetString(3);
+                        result.Ordered.Add(columnName);
                         // A type we cannot name is a type SqlLiteralFormatter would decline
                         // anyway; keep the column so "no FK" stays the reason, not "no column".
                         if (!result.Columns.TryGetValue(columnName, out var sameName))
@@ -261,6 +287,59 @@ WHERE o.object_id = @id AND o.type = 'U';";
                 }
                 return result;
             }
+        }
+
+        /// <summary>
+        /// Reads the column list of every table this shape's stars stand for, and returns a
+        /// lookup Resolve can call. Returns null when the shape has no expandable star, or when
+        /// any of those tables cannot be read -- Resolve then declines, exactly as it did before
+        /// stars could be expanded at all.
+        /// </summary>
+        private static async Task<Func<StaticFromItem, IReadOnlyList<string>>> BuildStarExpanderAsync(
+            StaticQueryShape shape,
+            Dictionary<string, TableColumns> cache,
+            Func<string, string> buildConnectionStringForDatabase,
+            int timeoutSeconds,
+            CancellationToken cancellationToken)
+        {
+            var targets = StaticShapeResolver.ResolveStarTargets(shape);
+            if (targets == null || targets.Count == 0) return null;
+
+            foreach (var target in targets)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var asSource = new StaticColumnSource(
+                    null, target.Table.Database, target.Table.Schema, target.Table.Table, null);
+                string key = TableKey(asSource);
+                if (cache.ContainsKey(key)) continue;
+
+                string connectionString = buildConnectionStringForDatabase(target.Table.Database);
+                if (connectionString == null) return null;
+
+                try
+                {
+                    using (var connection = new SqlConnection(connectionString))
+                    {
+                        await connection.OpenAsync(cancellationToken).ConfigureAwait(true);
+                        var loaded = await LoadTableAsync(connection, asSource, timeoutSeconds, cancellationToken).ConfigureAwait(true);
+                        if (loaded == null) return null;
+                        cache[key] = loaded;
+                    }
+                }
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested && !(ex is OperationCanceledException))
+                {
+                    // Query text can appear in SQL error messages -- log the type only.
+                    OeDiagnostics.Warn("Go to source: could not read a table's columns to expand a * (" + ex.GetType().Name + ").");
+                    return null;
+                }
+            }
+
+            return from =>
+            {
+                var asSource = new StaticColumnSource(null, from.Database, from.Schema, from.Table, null);
+                return cache.TryGetValue(TableKey(asSource), out var loaded) ? loaded.Ordered : null;
+            };
         }
 
         private static string TableKey(StaticColumnSource source) =>

@@ -96,8 +96,11 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             {
                 switch (element)
                 {
-                    case SelectStarExpression _:
-                        items.Add(StaticSelectItem.Star());
+                    case SelectStarExpression star:
+                        // Keep the qualifier: "FA.*" can be expanded from the catalog later,
+                        // and that is the single most common shape this fallback has to handle.
+                        items.Add(StaticSelectItem.Star(
+                            star.Qualifier?.Identifiers?.Select(i => i.Value).ToList()));
                         break;
                     case SelectScalarExpression scalar:
                         items.Add(ToSelectItem(scalar));

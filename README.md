@@ -200,7 +200,7 @@ record.
 - **With a keyboard shortcut** it uses the grid's current cell (the one you last clicked or
   moved to with the arrow keys). If several cells are selected, the status bar says which row's
   value it used.
-- **Queries with #temp tables** work too: when SQL Server can't describe the query (it can't see your session's temp tables), the extension reads the query itself — columns written as `alias.Column` from a real table get links; temp-table columns, expressions and `SELECT *` don't. The status bar says "resolved from the query text".
+- **Queries with #temp tables** work too: when SQL Server can't describe the query (it can't see your session's temp tables), the extension reads the query itself — columns written as `alias.Column` from a real table get links, and **`SELECT FA.*` works as well**: the table's real column list is read from the catalog and expanded. It is only used when the expanded names match the grid's headers exactly, so a table that has changed since you ran the query makes it decline rather than mislabel a column. Temp-table columns and expressions still get no link, and a bare `*` needs a single-table query. The status bar says "resolved from the query text".
 - **Several statements run together** work too — each grid is matched to the statement that
   produced it. If two of them return the same columns from *different* tables, it declines
   rather than guess; run just the statement you want.

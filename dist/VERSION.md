@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.21.2**
+**`SsmsDataAnalyzer.vsix` — version 0.22.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.22.0** — **`SELECT FA.*` now gets source links on queries SQL Server can't describe** (the #temp case). Until now a star made the whole grid decline — "none produced a result matching this grid's 87 columns" — because the column count isn't knowable from the query text. It is knowable from the catalog, so the starred table's real column list is read and expanded. This stays safe: the expanded list must match the grid's headers one-for-one, by count and by name, or it declines exactly as before. A bare `*` is expanded only for a single-table query; across a join the column order is the server's business, not ours.
 
 **0.21.2** — **The toolbar button has an icon.** It was declared two contradictory ways at once — "this icon is a built-in Visual Studio image" plus a pointer to a file resource — so SSMS looked for an image that did not exist and drew nothing. Both it and **Analyze Data...** now use Visual Studio's own icons (a clock with an arrow for history, a table for Analyze Data), which are themed and sharp at any display scaling, and add nothing to the download.
 
