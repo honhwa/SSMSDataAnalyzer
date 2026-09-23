@@ -420,6 +420,48 @@ Supported prefixes: `sql:`, `server:`, `database:` / `db:`, `starred:true|false`
 `error:true|false`. Bare words match inside the query text, case-insensitively; `"quoted
 phrases"` match as one term; several terms are AND.
 
+### 8.6a Phase 2 additions (frozen 2026-09-23)
+
+`HistoryFilter` gains two prefixes and one piece of caller-supplied context:
+
+```csharp
+public sealed class HistoryFilter
+{
+    // ... 8.6 unchanged ...
+
+    /// <summary>Names of the query documents currently open in SSMS. Supplied by the Vsix,
+    /// read on the UI thread and handed in -- Core never touches DTE. Null means "unknown",
+    /// and a closed:/open: term then matches nothing rather than guessing.</summary>
+    public ISet<string> OpenDocumentNames { get; set; }
+}
+```
+
+- `doc:<text>` matches `HistoryEntry.DocumentName`, case-insensitively, like `server:`.
+- `closed:true` matches entries whose `DocumentName` is **not** in `OpenDocumentNames`
+  (`closed:false` the reverse). This is plan item 11: finding what you ran in a tab you have
+  since closed. Comparison is `OrdinalIgnoreCase`.
+- `GroupIdenticalText` (already in 8.6) collapses on exact `Text`, keeping the newest of each
+  group. `HistoryStore.Query` applies it after filtering and before `max`, which is what the
+  existing implementation already does -- Phase 2 only exposes it in the UI.
+
+Grouping needs one new piece of data so the UI can say "x3":
+
+```csharp
+public sealed class HistoryEntry
+{
+    // ... 8.1 unchanged ...
+
+    /// <summary>How many executions this row stands for once GroupIdenticalText collapsed
+    /// them; 1 when grouping is off. Never serialized -- it is a property of a query result,
+    /// not of a stored entry.</summary>
+    public int GroupCount { get; set; }
+}
+```
+
+`Query` sets `GroupCount` on the entries it returns (1 when grouping is off) and must not
+mutate the stored index entries -- return copies when grouping, or the count leaks into
+later ungrouped queries.
+
 ### 8.7 IDs and GUIDs (lead-assigned — do not change)
 
 | Name | Value |
