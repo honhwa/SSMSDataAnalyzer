@@ -111,6 +111,39 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             }
         }
 
+        /// <summary>
+        /// The editor's current selection, when it is short enough and simple enough to be the
+        /// tail of one of SSMS's query shortcuts (Tools > Options > Environment > Keyboard >
+        /// Query Shortcuts): select a table name, press Ctrl+3, and SSMS executes
+        /// "SELECT TOP(100) * FROM &lt;that name&gt;" without the text ever appearing in the
+        /// editor or reaching our Execute hook.
+        ///
+        /// Returned as a SECOND candidate, never as a replacement: callers pass it as
+        /// Request.AlternateEditorText, which is only tried after the recorded text has already
+        /// failed to match the grid. Null when there is no usable selection.
+        /// </summary>
+        public static string TryGetQueryShortcutTarget()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                if (!(_dte?.ActiveDocument?.Selection is TextSelection selection) || selection.IsEmpty) return null;
+
+                string text = selection.Text;
+                if (string.IsNullOrWhiteSpace(text)) return null;
+
+                text = text.Trim();
+                if (text.Length > 300) return null;
+                if (text.IndexOf('\n') >= 0 || text.IndexOf('\r') >= 0) return null;
+
+                return text;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static void OnBeforeExecute(string guid, int id, object customIn, object customOut, ref bool cancelDefault)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

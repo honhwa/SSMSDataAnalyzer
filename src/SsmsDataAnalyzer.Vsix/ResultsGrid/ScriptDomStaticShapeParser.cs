@@ -31,7 +31,9 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
 
             try
             {
-                return ParseCore(text) ?? StaticQueryShape.Unusable();
+                return ParseCore(text)
+                    ?? ParseAsQueryShortcutTarget(text)
+                    ?? StaticQueryShape.Unusable();
             }
             catch (Exception ex) when (ex is FileNotFoundException || ex is FileLoadException || ex is BadImageFormatException ||
                                        ex is TypeLoadException || ex is MissingMethodException || ex is MissingFieldException)
@@ -121,7 +123,49 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             return new StaticQueryShape(items, fromItems, cteNames, isSetOperation);
         }
 
-        /// <summary>Allow-list: statements that never send a result set to the client. Anything
+        /// <summary>
+        /// SSMS's **query shortcuts** (Tools > Options > Environment > Keyboard > Query
+        /// Shortcuts) execute text SSMS composes itself: Ctrl+3 is "SELECT TOP(100) * FROM"
+        /// plus whatever you selected. That composed text never appears in the editor, so all we
+        /// ever captured was the selection -- a bare table name, which parses as nothing and
+        /// left the grid with no source links (field report).
+        ///
+        /// So when the captured text is not a statement in its own right, try reading it as the
+        /// tail of exactly such a shortcut: the shape of "SELECT * FROM &lt;text&gt;".
+        ///
+        /// This is a candidate, not a conclusion. The shape still goes through the usual
+        /// verification, where the starred table's real columns must match the grid's headers
+        /// one-for-one. That is what makes it safe to guess here: the OTHER shortcuts compose
+        /// something with a different shape -- Ctrl+4's "SELECT COUNT(1) FROM x" makes a
+        /// one-column grid, Alt+F1's "sp_help x" makes sp_help's own columns -- and neither
+        /// matches the table's column list, so both decline instead of resolving wrongly.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static StaticQueryShape ParseAsQueryShortcutTarget(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            // Cheap rejections first: a shortcut target is one short line naming an object.
+            string trimmed = text.Trim();
+            if (trimmed.Length > 300) return null;
+            if (trimmed.IndexOf('\n') >= 0 || trimmed.IndexOf('\r') >= 0) return null;
+            if (trimmed.IndexOf(';') >= 0) return null;
+            if (trimmed.IndexOf("--", StringComparison.Ordinal) >= 0) return null;
+            if (trimmed.IndexOf("/*", StringComparison.Ordinal) >= 0) return null;
+
+            var shape = ParseCore("SELECT * FROM " + trimmed);
+            if (shape == null || !shape.Parsed) return null;
+
+            // Exactly "* from one table", nothing cleverer: the text must have contributed a
+            // table reference and nothing else.
+            if (shape.IsSetOperation) return null;
+            if (shape.SelectItems.Count != 1 || !shape.SelectItems[0].IsStar) return null;
+            if (shape.FromItems.Count != 1) return null;
+
+            return shape;
+        }
+
+        /// <summary>Allow-list: statements that never send a result set to the client.        /// <summary>Allow-list: statements that never send a result set to the client. Anything
         /// else (EXEC, IF/WHILE/BEGIN…END/TRY blocks that could hide a SELECT, DML with OUTPUT,
         /// SET STATISTICS …) makes the text unusable statically.</summary>
         private static bool CannotReturnResultSet(TSqlStatement statement)

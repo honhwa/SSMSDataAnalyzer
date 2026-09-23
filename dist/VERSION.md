@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.22.0**
+**`SsmsDataAnalyzer.vsix` — version 0.23.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.23.0** — **Go to source and Peek now work on grids produced by SSMS's query shortcuts.** Select a table name, press **Ctrl+3** (`SELECT TOP(100) * FROM`), and the columns get source links — even though the query SSMS ran was composed by SSMS and never appeared in your editor. The selected name is read as `SELECT * FROM <name>` and checked against the grid: only if the table's real columns match the grid's headers exactly is anything reported. Shortcuts with a different shape, like **Ctrl+4** (`SELECT COUNT(1) FROM`) and **Alt+F1** (`sp_help`), therefore get no links rather than wrong ones.
 
 **0.22.0** — **`SELECT FA.*` now gets source links on queries SQL Server can't describe** (the #temp case). Until now a star made the whole grid decline — "none produced a result matching this grid's 87 columns" — because the column count isn't knowable from the query text. It is knowable from the catalog, so the starred table's real column list is read and expanded. This stays safe: the expanded list must match the grid's headers one-for-one, by count and by name, or it declines exactly as before. A bare `*` is expanded only for a single-table query; across a join the column order is the server's business, not ours.
 

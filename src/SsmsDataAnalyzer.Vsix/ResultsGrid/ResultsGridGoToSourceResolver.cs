@@ -59,6 +59,22 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
             /// describe result's source_database) — normally <see cref="GridConnectionInfo.TryBuild"/>
             /// bound to the same UIConnectionInfo as <see cref="EditorConnectionString"/>.</summary>
             public Func<string, string> BuildConnectionStringForDatabase;
+
+            /// <summary>
+            /// A second text to try if <see cref="EditorText"/> matches nothing, normally the
+            /// editor's current selection.
+            ///
+            /// Why: SSMS's query shortcuts (Ctrl+3 = "SELECT TOP(100) * FROM") execute text
+            /// SSMS composes from the fragment plus the selection, and that text never reaches
+            /// the editor or our Execute hook. The tracker therefore holds either nothing or
+            /// the PREVIOUS statement run in that tab, and the grid in front of the user came
+            /// from neither.
+            ///
+            /// Trying the selection as well costs one extra describe on an answer we were about
+            /// to decline anyway, and it cannot produce a wrong answer: every candidate still
+            /// has to full-shape-match the grid before any source is reported.
+            /// </summary>
+            public string AlternateEditorText;
         }
 
         public sealed class Result
@@ -122,6 +138,20 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
                 request.GridColumnNames, request.GridColumnOrdinal, request.GridColumnName,
                 request.BuildConnectionStringForDatabase,
                 describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
+
+            // Second chance for a grid produced by a query shortcut -- see Request.AlternateEditorText.
+            if (!shape.IsMatch
+                && !string.IsNullOrWhiteSpace(request.AlternateEditorText)
+                && !string.Equals(request.AlternateEditorText, request.EditorText, StringComparison.Ordinal))
+            {
+                var alternate = await DescribeAndMatchAsync(
+                    request.EditorConnectionString, request.AlternateEditorText, request.NumberOfDataColumns,
+                    request.GridColumnNames, request.GridColumnOrdinal, request.GridColumnName,
+                    request.BuildConnectionStringForDatabase,
+                    describeTimeoutSeconds, cancellationToken).ConfigureAwait(true);
+
+                if (alternate.IsMatch) shape = alternate;
+            }
 
             // Every message about a statically-resolved match (StaticSourceResolution) says so.
             string note = shape.StaticNote ?? "";

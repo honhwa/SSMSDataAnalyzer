@@ -183,6 +183,7 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
                 {
                     EditorConnectionString = editorConnectionString,
                     EditorText = tsql,
+                    AlternateEditorText = ExecutedQueryTextTracker.TryGetQueryShortcutTarget(),
                     GridColumnOrdinal = cell.GridCol,
                     GridColumnNames = cell.AllColumnNames,
                     GridColumnName = cell.ColumnName,
