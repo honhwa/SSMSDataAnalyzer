@@ -1,7 +1,8 @@
 # Query History — development plan
 
-Status: **planned, not started.** Open decisions are in §9. The spike (§6) runs before any UI
-code.
+Status: **in development (started 2026-09-23).** The interface is frozen in §8. Wave 1 is the
+spike (§6) plus the Core work; no UI code starts before the spike answers are in. Open
+decisions are in §9.
 
 ## 1. What it does
 
@@ -237,17 +238,162 @@ Waves:
 3. The lead builds and sends the `.vsix` for a live check (standing rule).
 4. D2, then release.
 
-## 8. Frozen interface (to be written by the lead after the spike)
+## 8. Frozen interface (frozen by the lead, 2026-09-23)
 
-Core `SsmsDataAnalyzer.Core.History`:
-- `HistoryEntry`: Id (Guid), StartedUtc, Server, Database, Login, AuthKind, DocumentName,
-  Text, TextTruncated, DurationMs?, Outcome?, RowCount?, Starred.
-- `IHistoryStore`: `Append`, `SetStarred`, `Delete`, `ClearAll`, `LoadAsync`, `Query`, and a
-  `Changed` event.
-- `HistoryQuery.Parse(string)` → filter object.
-- `SecretRedactor.Redact(text, tokens)`.
+H1 owns everything under `src/SsmsDataAnalyzer.Core/History/`. H2 codes against these names and
+may not change them. Core is `netstandard2.0` and references nothing but
+`Microsoft.Data.SqlClient`, so: **no Json.NET, no SQLite, no `ProtectedData`** — the JSON writer
+is hand-rolled for this one fixed schema, and DPAPI lives behind `IKeyProtector`, implemented in
+the Vsix.
 
-Exact signatures get fixed in this section before H1/H2 start.
+### 8.1 Model
+
+```csharp
+namespace SsmsDataAnalyzer.Core.History
+{
+    public enum HistoryAuthKind { Unknown = 0, Windows = 1, SqlLogin = 2, Entra = 3 }
+    public enum HistoryOutcome  { Unknown = 0, Success = 1, Error = 2, Cancelled = 3 }
+
+    public sealed class HistoryEntry
+    {
+        public Guid            Id            { get; set; }   // required, unique
+        public DateTime        StartedUtc    { get; set; }   // always UTC, Kind=Utc
+        public string          Server        { get; set; }
+        public string          Database      { get; set; }
+        public string          Login         { get; set; }   // never a password
+        public HistoryAuthKind AuthKind      { get; set; }
+        public string          DocumentName  { get; set; }
+        public string          Text          { get; set; }   // verbatim, secrets included
+        public bool            TextTruncated { get; set; }
+        public int?            DurationMs    { get; set; }
+        public HistoryOutcome? Outcome       { get; set; }
+        public long?           RowCount      { get; set; }
+        public bool            Starred       { get; set; }   // from the edits sidecar, not the month file
+    }
+}
+```
+
+`Starred` is never written to a month file; month files are append-only and immutable.
+
+### 8.2 Serialization — `HistoryJson`
+
+```csharp
+public static class HistoryJson
+{
+    public const int MaxTextBytes = 1024 * 1024;              // 1 MB, then truncate + flag
+
+    public static string Write(HistoryEntry entry);           // one line, no newline, no BOM
+    public static bool   TryParse(string line, out HistoryEntry entry);  // false = skip the line
+    public static string WriteEdit(HistoryEdit edit);
+    public static bool   TryParseEdit(string line, out HistoryEdit edit);
+}
+
+public sealed class HistoryEdit
+{
+    public Guid Id      { get; set; }
+    public bool? Starred { get; set; }   // null = not changed by this edit
+    public bool Deleted  { get; set; }
+}
+```
+
+`TryParse` returns false — never throws — for a torn, empty or unknown-shape line. Unknown JSON
+fields are ignored, so a newer build's files stay loadable. Escaping must round-trip `"` `\`
+control characters, newlines/tabs and non-BMP characters; there is a unit test per case.
+
+### 8.3 Encryption — `HistoryCipher`
+
+```csharp
+public interface IKeyProtector       // DPAPI in the Vsix, a fake in tests
+{
+    byte[] Protect(byte[] plaintextKey);
+    byte[] Unprotect(byte[] protectedKey);   // throws if it can't
+}
+
+public sealed class HistoryCipher
+{
+    public const string LinePrefix = "v1:";
+
+    public HistoryCipher(byte[] key);                  // exactly 64 bytes: 32 AES + 32 HMAC
+    public static byte[] NewKey();                     // RandomNumberGenerator
+    public string EncryptLine(string plaintext);       // "v1:" + base64(IV | ciphertext | MAC)
+    public bool   TryDecryptLine(string line, out string plaintext);  // false = skip
+}
+```
+
+AES-256-CBC, PKCS7, a fresh random 16-byte IV per line; HMAC-SHA256 over `IV | ciphertext`,
+compared in constant time. Encrypt-then-MAC: a line whose MAC fails is skipped, never decrypted.
+`TryDecryptLine` never throws.
+
+`HistoryKeyStore` (Core) reads/creates `key.bin` through `IHistoryFileSystem` + `IKeyProtector`:
+`byte[] LoadOrCreate()`, `void Destroy()` (crypto-shred, called first by Clear all).
+
+### 8.4 Files — `IHistoryFileSystem`
+
+```csharp
+public interface IHistoryFileSystem
+{
+    void   EnsureDirectory(string path);           // + the user-only ACL in the Vsix impl
+    bool   FileExists(string path);
+    string[] ReadAllLines(string path);            // empty array when missing
+    void   AppendLines(string path, IEnumerable<string> lines);
+    byte[] ReadAllBytes(string path);
+    void   WriteAllBytes(string path, byte[] bytes);
+    void   DeleteFile(string path);
+    string[] ListFiles(string directory, string searchPattern);
+    void   ReplaceFile(string sourcePath, string destinationPath);   // trim writes a new file, then swaps
+}
+```
+
+### 8.5 Store — `HistoryStore`
+
+```csharp
+public sealed class HistoryStore
+{
+    public HistoryStore(IHistoryFileSystem fileSystem, string rootDirectory,
+                        HistoryCipher cipher, Func<DateTime> utcNow);
+
+    public void Load();                                  // month files + edits.jsonl -> in-memory index
+    public void Append(HistoryEntry entry);              // writes <yyyy-MM>.jsonl; caller is the writer thread
+    public void SetStarred(Guid id, bool starred);       // appends to edits.jsonl
+    public void Delete(Guid id);                         // appends to edits.jsonl (tombstone)
+    public void ClearAll();                              // key destroyed by the caller first, then every file
+    public int  Trim(int retentionDays);                 // returns entries removed; starred are kept
+    public IReadOnlyList<HistoryEntry> Query(HistoryFilter filter, int max);  // newest first
+    public event EventHandler Changed;
+}
+```
+
+Every public member is thread-safe (one lock). The store does no threading of its own — the Vsix
+owns the background writer queue and calls `Append` from it.
+
+### 8.6 Search — `HistoryFilter`
+
+```csharp
+public enum HistoryDateRange { All = 0, Today = 1, Last7Days = 2, Last30Days = 3 }
+
+public sealed class HistoryFilter
+{
+    public static HistoryFilter Parse(string searchText);   // never throws
+    public HistoryDateRange DateRange { get; set; }
+    public bool GroupIdenticalText { get; set; }
+    public bool Matches(HistoryEntry entry, DateTime utcNow);
+}
+```
+
+Supported prefixes: `sql:`, `server:`, `database:` / `db:`, `starred:true|false`,
+`error:true|false`. Bare words match inside the query text, case-insensitively; `"quoted
+phrases"` match as one term; several terms are AND.
+
+### 8.7 IDs and GUIDs (lead-assigned — do not change)
+
+| Name | Value |
+|---|---|
+| `PackageIds.QueryHistoryCommandId` | `0x0400` |
+| `PackageIds.QueryHistoryToolbar` | `0x1060` |
+| `PackageIds.QueryHistoryToolbarGroup` | `0x1061` |
+| `PackageGuids.QueryHistoryToolWindowPersistenceGuid` | `5f3a1c72-8d46-4b09-a2e7-6c81d4f9b3e5` |
+| Command CanonicalName (for a shortcut) | `SsmsDataAnalyzer.QueryHistory` |
+| Options | `EnableQueryHistory` (bool, true), `QueryHistoryExcludedServers` (string, empty), `QueryHistoryRetentionDays` (int, 30) |
 
 ## 9. Open decisions
 
