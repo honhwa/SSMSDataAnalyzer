@@ -51,6 +51,21 @@ namespace SsmsDataAnalyzer.Tests.History
         }
 
         [Fact]
+        public void Write_NeverSerializes_GroupCount()
+        {
+            var entry = SampleEntry();
+            entry.GroupCount = 5;
+
+            string line = HistoryJson.Write(entry);
+
+            Assert.DoesNotContain("groupCount", line, StringComparison.OrdinalIgnoreCase);
+
+            bool ok = HistoryJson.TryParse(line, out HistoryEntry parsed);
+            Assert.True(ok);
+            Assert.Equal(1, parsed.GroupCount);
+        }
+
+        [Fact]
         public void RoundTrips_NullableFieldsAsNull()
         {
             var entry = SampleEntry();

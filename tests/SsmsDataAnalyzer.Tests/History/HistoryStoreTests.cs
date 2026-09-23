@@ -355,5 +355,61 @@ namespace SsmsDataAnalyzer.Tests.History
             var results = store.Query(HistoryFilter.Parse(null), 10);
             Assert.NotEqual(Guid.Empty, results.Single().Id);
         }
+
+        [Fact]
+        public void Query_WithoutGrouping_SetsGroupCountToOne()
+        {
+            var now = new DateTime(2026, 9, 23, 10, 0, 0, DateTimeKind.Utc);
+            var (store, _, _) = MakeStore(now);
+            store.Append(Entry(now, text: "SELECT 1"));
+
+            var results = store.Query(HistoryFilter.Parse(null), 10);
+
+            Assert.Equal(1, results.Single().GroupCount);
+        }
+
+        [Fact]
+        public void Query_WithGrouping_SetsGroupCount_AndKeepsNewestOfEachGroup()
+        {
+            var now = new DateTime(2026, 9, 23, 10, 0, 0, DateTimeKind.Utc);
+            var (store, _, _) = MakeStore(now);
+
+            var older = Entry(now.AddMinutes(-10), text: "SELECT 1");
+            var newer = Entry(now, text: "SELECT 1");
+            var other = Entry(now.AddMinutes(-5), text: "SELECT 2");
+            store.Append(older);
+            store.Append(newer);
+            store.Append(other);
+
+            var filter = HistoryFilter.Parse(null);
+            filter.GroupIdenticalText = true;
+            var results = store.Query(filter, 10);
+
+            Assert.Equal(2, results.Count);
+            var select1 = results.Single(e => e.Text == "SELECT 1");
+            Assert.Equal(newer.Id, select1.Id);
+            Assert.Equal(2, select1.GroupCount);
+            var select2 = results.Single(e => e.Text == "SELECT 2");
+            Assert.Equal(1, select2.GroupCount);
+        }
+
+        [Fact]
+        public void Query_GroupedThenUngrouped_DoesNotLeakGroupCount_IntoLaterUngroupedQuery()
+        {
+            var now = new DateTime(2026, 9, 23, 10, 0, 0, DateTimeKind.Utc);
+            var (store, _, _) = MakeStore(now);
+
+            store.Append(Entry(now.AddMinutes(-10), text: "SELECT 1"));
+            store.Append(Entry(now, text: "SELECT 1"));
+
+            var groupedFilter = HistoryFilter.Parse(null);
+            groupedFilter.GroupIdenticalText = true;
+            var groupedResults = store.Query(groupedFilter, 10);
+            Assert.Equal(2, groupedResults.Single().GroupCount);
+
+            var ungroupedResults = store.Query(HistoryFilter.Parse(null), 10);
+
+            Assert.All(ungroupedResults, e => Assert.Equal(1, e.GroupCount));
+        }
     }
 }

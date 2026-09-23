@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SsmsDataAnalyzer.Core.History;
 using Xunit;
 
@@ -14,7 +15,8 @@ namespace SsmsDataAnalyzer.Tests.History
             string database = "DB1",
             bool starred = false,
             HistoryOutcome? outcome = HistoryOutcome.Success,
-            DateTime? startedUtc = null)
+            DateTime? startedUtc = null,
+            string documentName = null)
         {
             return new HistoryEntry
             {
@@ -25,6 +27,7 @@ namespace SsmsDataAnalyzer.Tests.History
                 Starred = starred,
                 Outcome = outcome,
                 StartedUtc = startedUtc ?? Now,
+                DocumentName = documentName,
             };
         }
 
@@ -172,6 +175,47 @@ namespace SsmsDataAnalyzer.Tests.History
             filter.DateRange = HistoryDateRange.All;
 
             Assert.True(filter.Matches(Entry(startedUtc: Now.AddYears(-5)), Now));
+        }
+
+        [Fact]
+        public void DocPrefix_Matches_CaseInsensitive()
+        {
+            var filter = HistoryFilter.Parse("doc:SQLQuery1.sql");
+            Assert.True(filter.Matches(Entry(documentName: "sqlquery1.sql"), Now));
+            Assert.False(filter.Matches(Entry(documentName: "SQLQuery2.sql"), Now));
+        }
+
+        [Theory]
+        [InlineData("closed:true", "Closed.sql", true)]   // not in open set -> matches closed:true
+        [InlineData("closed:true", "Open.sql", false)]    // is open -> does not match closed:true
+        [InlineData("closed:false", "Open.sql", true)]    // is open -> matches closed:false
+        [InlineData("closed:false", "Closed.sql", false)] // not open -> does not match closed:false
+        public void ClosedPrefix_Matches_WithPopulatedOpenSet(string search, string documentName, bool expected)
+        {
+            var filter = HistoryFilter.Parse(search);
+            filter.OpenDocumentNames = new HashSet<string>(new[] { "Open.sql" }, StringComparer.OrdinalIgnoreCase);
+
+            Assert.Equal(expected, filter.Matches(Entry(documentName: documentName), Now));
+        }
+
+        [Fact]
+        public void ClosedPrefix_MatchesCaseInsensitively_AgainstOpenSet()
+        {
+            var filter = HistoryFilter.Parse("closed:false");
+            filter.OpenDocumentNames = new HashSet<string>(new[] { "Open.sql" }, StringComparer.OrdinalIgnoreCase);
+
+            Assert.True(filter.Matches(Entry(documentName: "OPEN.SQL"), Now));
+        }
+
+        [Theory]
+        [InlineData("closed:true")]
+        [InlineData("closed:false")]
+        public void ClosedPrefix_WithNullOpenDocumentNames_MatchesNothing(string search)
+        {
+            var filter = HistoryFilter.Parse(search);
+            Assert.Null(filter.OpenDocumentNames);
+
+            Assert.False(filter.Matches(Entry(documentName: "Anything.sql"), Now));
         }
     }
 }

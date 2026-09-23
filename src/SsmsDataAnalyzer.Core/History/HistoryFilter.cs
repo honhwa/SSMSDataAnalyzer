@@ -8,15 +8,16 @@ namespace SsmsDataAnalyzer.Core.History
 
     /// <summary>
     /// Parses the query history search box: <c>sql:</c>, <c>server:</c>,
-    /// <c>database:</c>/<c>db:</c>, <c>starred:true|false</c>, <c>error:true|false</c> as
-    /// prefixes; bare words match inside the query text case-insensitively; a
-    /// <c>"quoted phrase"</c> (with or without a prefix) is one term; several terms are AND'd.
-    /// <see cref="Parse"/> never throws -- unrecognized or malformed pieces are best-effort
-    /// (an unparsable <c>starred:</c>/<c>error:</c> value is simply dropped).
+    /// <c>database:</c>/<c>db:</c>, <c>starred:true|false</c>, <c>error:true|false</c>,
+    /// <c>doc:</c>, <c>closed:true|false</c> as prefixes; bare words match inside the query
+    /// text case-insensitively; a <c>"quoted phrase"</c> (with or without a prefix) is one
+    /// term; several terms are AND'd. <see cref="Parse"/> never throws -- unrecognized or
+    /// malformed pieces are best-effort (an unparsable <c>starred:</c>/<c>error:</c>/
+    /// <c>closed:</c> value is simply dropped).
     /// </summary>
     public sealed class HistoryFilter
     {
-        private enum TermKind { Text, Server, Database, Starred, Error }
+        private enum TermKind { Text, Server, Database, Starred, Error, Document, Closed }
 
         private sealed class Term
         {
@@ -31,6 +32,11 @@ namespace SsmsDataAnalyzer.Core.History
 
         public bool GroupIdenticalText { get; set; }
 
+        /// <summary>Names of the query documents currently open in SSMS. Supplied by the
+        /// Vsix, read on the UI thread and handed in -- Core never touches DTE. Null means
+        /// "unknown", and a <c>closed:</c> term then matches nothing rather than guessing.</summary>
+        public ISet<string> OpenDocumentNames { get; set; }
+
         public static HistoryFilter Parse(string searchText)
         {
             var filter = new HistoryFilter();
@@ -44,8 +50,10 @@ namespace SsmsDataAnalyzer.Core.History
                     ?? TryParsePrefixed(token, "server:", TermKind.Server)
                     ?? TryParsePrefixed(token, "database:", TermKind.Database)
                     ?? TryParsePrefixed(token, "db:", TermKind.Database)
+                    ?? TryParsePrefixed(token, "doc:", TermKind.Document)
                     ?? TryParseBoolPrefixed(token, "starred:", TermKind.Starred)
-                    ?? TryParseBoolPrefixed(token, "error:", TermKind.Error);
+                    ?? TryParseBoolPrefixed(token, "error:", TermKind.Error)
+                    ?? TryParseBoolPrefixed(token, "closed:", TermKind.Closed);
 
                 if (term != null)
                 {
@@ -88,6 +96,14 @@ namespace SsmsDataAnalyzer.Core.History
                     case TermKind.Error:
                         bool isError = entry.Outcome == HistoryOutcome.Error;
                         if (isError != term.BoolValue) return false;
+                        break;
+                    case TermKind.Document:
+                        if (!ContainsIgnoreCase(entry.DocumentName, term.Text)) return false;
+                        break;
+                    case TermKind.Closed:
+                        if (OpenDocumentNames == null) return false;
+                        bool isOpen = entry.DocumentName != null && IsOpenDocument(entry.DocumentName);
+                        if (isOpen == term.BoolValue) return false;
                         break;
                 }
             }
@@ -137,6 +153,15 @@ namespace SsmsDataAnalyzer.Core.History
                 return value.Substring(1, value.Length - 2);
             }
             return value;
+        }
+
+        private bool IsOpenDocument(string documentName)
+        {
+            foreach (string open in OpenDocumentNames)
+            {
+                if (string.Equals(open, documentName, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
         }
 
         private static bool ContainsIgnoreCase(string haystack, string needle)

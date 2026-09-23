@@ -195,6 +195,27 @@ namespace SsmsDataAnalyzer.Core.History
         {
             filter = filter ?? HistoryFilter.Parse(null);
 
+            HistoryEntry CopyWithGroupCount(HistoryEntry source, int groupCount)
+            {
+                return new HistoryEntry
+                {
+                    Id = source.Id,
+                    StartedUtc = source.StartedUtc,
+                    Server = source.Server,
+                    Database = source.Database,
+                    Login = source.Login,
+                    AuthKind = source.AuthKind,
+                    DocumentName = source.DocumentName,
+                    Text = source.Text,
+                    TextTruncated = source.TextTruncated,
+                    DurationMs = source.DurationMs,
+                    Outcome = source.Outcome,
+                    RowCount = source.RowCount,
+                    Starred = source.Starred,
+                    GroupCount = groupCount,
+                };
+            }
+
             lock (_lock)
             {
                 DateTime now = _utcNow();
@@ -206,8 +227,12 @@ namespace SsmsDataAnalyzer.Core.History
                 {
                     matches = matches
                         .GroupBy(e => e.Text ?? string.Empty)
-                        .Select(g => g.First())
+                        .Select(g => CopyWithGroupCount(g.First(), g.Count()))
                         .OrderByDescending(e => e.StartedUtc);
+                }
+                else
+                {
+                    matches = matches.Select(e => CopyWithGroupCount(e, 1));
                 }
 
                 if (max >= 0)

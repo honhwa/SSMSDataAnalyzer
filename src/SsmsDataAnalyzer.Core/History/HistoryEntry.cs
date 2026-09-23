@@ -31,6 +31,13 @@ namespace SsmsDataAnalyzer.Core.History
         /// month file itself. Month files are append-only and immutable; see §8.1/§8.5.
         /// </summary>
         public bool Starred { get; set; }
+
+        /// <summary>
+        /// How many executions this row stands for once <see cref="HistoryFilter.GroupIdenticalText"/>
+        /// collapsed them; 1 when grouping is off. Never serialized -- it is a property of a
+        /// query result, not of a stored entry.
+        /// </summary>
+        public int GroupCount { get; set; } = 1;
     }
 
     /// <summary>
