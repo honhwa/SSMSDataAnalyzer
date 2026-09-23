@@ -55,19 +55,53 @@ namespace SsmsDataAnalyzer.Vsix.History
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                if (string.IsNullOrWhiteSpace(executedText)) return;
-                if (!OptionsAccessor.GetEnableQueryHistory()) return;
+                QueryHistoryDiagnostics.ExecutionSeen();
+
+                if (string.IsNullOrWhiteSpace(executedText))
+                {
+                    QueryHistoryDiagnostics.Note("not recorded - the executed text came back empty");
+                    return;
+                }
+                if (!OptionsAccessor.GetEnableQueryHistory())
+                {
+                    QueryHistoryDiagnostics.Note("not recorded - 'Enable query history' is off in Options");
+                    return;
+                }
 
                 var editor = DataAnalyzerPackage.FindSqlScriptEditorControl(document);
                 UIConnectionInfo ci = editor?.Connection;
                 string server = ci?.ServerName;
-                if (string.IsNullOrEmpty(server)) return; // nothing usable to record against
 
-                if (IsExcludedServer(server)) return;
+                // We used to drop the execution whenever the connection couldn't be read, which
+                // meant a single unexpected SSMS shape produced a permanently empty history and
+                // no explanation. The query text and the time are worth keeping on their own, so
+                // record it with the server left blank instead.
+                //
+                // The one case where dropping is still right: an Excluded servers list is set.
+                // Not knowing the server means we cannot honour that exclusion, and quietly
+                // recording a query the user asked us never to record would be the worse
+                // failure. That stays a deliberate refusal, and it says so.
+                if (string.IsNullOrEmpty(server))
+                {
+                    if (!string.IsNullOrWhiteSpace(OptionsAccessor.GetQueryHistoryExcludedServers()))
+                    {
+                        QueryHistoryDiagnostics.Note(
+                            "not recorded - this query window's server could not be read, and an Excluded servers list is set, "
+                            + "so the exclusion cannot be honoured. Clear that list to record executions like this one.");
+                        return;
+                    }
 
-                string database = ci.AdvancedOptions != null ? ci.AdvancedOptions["DATABASE"] : null;
-                string login = ci.UserName;
-                HistoryAuthKind authKind = ClassifyAuthKind(ci);
+                    QueryHistoryDiagnostics.Note("recorded, but this query window's server/database could not be read");
+                }
+                else if (IsExcludedServer(server))
+                {
+                    QueryHistoryDiagnostics.Note("not recorded - this server is in the Excluded servers list");
+                    return;
+                }
+
+                string database = ci?.AdvancedOptions != null ? ci.AdvancedOptions["DATABASE"] : null;
+                string login = ci?.UserName;
+                HistoryAuthKind authKind = ci != null ? ClassifyAuthKind(ci) : HistoryAuthKind.Unknown;
 
                 var entry = new HistoryEntry
                 {
@@ -91,7 +125,7 @@ namespace SsmsDataAnalyzer.Vsix.History
                 var pending = new PendingCapture { Entry = entry };
                 lock (PendingLock) { Pending[key] = pending; }
 
-                pending.Detach = QueryHistoryCompletionListener.TryAttach(editor, (outcome, durationMs, rowCount) =>
+                pending.Detach = editor == null ? null : QueryHistoryCompletionListener.TryAttach(editor, (outcome, durationMs, rowCount) =>
                 {
                     FinishPending(key, pending, outcome, durationMs, rowCount);
                 });
@@ -113,6 +147,7 @@ namespace SsmsDataAnalyzer.Vsix.History
             {
                 // Never interfere with the user's Execute -- no query text/server/database in
                 // the message.
+                QueryHistoryDiagnostics.Note("not recorded - capture failed (" + ex.GetType().Name + ")");
                 ObjectExplorer.OeDiagnostics.Error("Query history: capturing an execution failed", ex);
             }
         }
@@ -169,6 +204,7 @@ namespace SsmsDataAnalyzer.Vsix.History
             pending.Entry.DurationMs = durationMs;
             pending.Entry.RowCount = rowCount;
 
+            QueryHistoryDiagnostics.Recorded();
             QueryHistoryService.Capture(pending.Entry);
         }
 

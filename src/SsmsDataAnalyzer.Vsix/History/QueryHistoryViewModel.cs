@@ -155,7 +155,16 @@ namespace SsmsDataAnalyzer.Vsix.History
                 }
 
                 SelectedItem = toReselect;
-                StatusText = Items.Count == 1 ? "1 entry" : Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " entries";
+                if (Items.Count == 0 && string.IsNullOrWhiteSpace(SearchText))
+                {
+                    // Empty with no filter applied is the case people report as "it doesn't
+                    // work", so say what the capture path actually did rather than nothing.
+                    StatusText = "No entries yet. " + QueryHistoryDiagnostics.Describe();
+                }
+                else
+                {
+                    StatusText = Items.Count == 1 ? "1 entry" : Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " entries";
+                }
             }
             catch (Exception ex)
             {

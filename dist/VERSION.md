@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.19.1**
+**`SsmsDataAnalyzer.vsix` — version 0.19.2**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.19.2** — **Query History now says why it is empty**, instead of just showing nothing: open Tools → Query History… and the line under the list reports how many executions were seen, how many were recorded, and the reason for the last one that wasn't (never any query text, server or database name — the reasons are value-free). Also, an execution whose connection cannot be read is now still recorded, with the server left blank, rather than being dropped — except when an Excluded servers list is set, where not knowing the server means the exclusion can't be honoured, so it is deliberately skipped and says so.
 
 **0.19.1** — **Fixes Query History recording nothing at all in 0.19.0.** The history folder was never created before the encryption key was written to it, so setting up history failed on the first run and every execution went unrecorded, silently. Nothing was lost that had been saved — nothing had been saved. Also: an entry now appears within a few seconds of running the query instead of waiting up to 30 seconds for the optional duration signal, and **Clear all history** now creates a fresh key for the rest of the session (previously, queries run after a Clear would have been unreadable the next time SSMS started).
 

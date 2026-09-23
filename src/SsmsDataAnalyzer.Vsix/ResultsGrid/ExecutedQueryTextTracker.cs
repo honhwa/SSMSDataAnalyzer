@@ -54,6 +54,7 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
                 if (_dte == null)
                 {
                     OeDiagnostics.Warn("Executed-query tracking unavailable: no DTE service. Go to source will read the editor's current text.");
+                    History.QueryHistoryDiagnostics.HookState("unavailable - no DTE service");
                     return;
                 }
 
@@ -81,6 +82,11 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
                 OeDiagnostics.Info(hooked.Count > 0
                     ? "Executed-query tracking hooked: " + string.Join(", ", hooked)
                     : "Executed-query tracking: no Execute command found. Go to source will read the editor's current text.");
+
+                // Query History depends entirely on these hooks, and unlike Go to source it has
+                // no fallback, so the Query History window reports this when it has nothing to
+                // show. Command names only.
+                History.QueryHistoryDiagnostics.HookState(hooked.Count > 0 ? string.Join(", ", hooked) : "none");
             }
             catch (Exception ex)
             {
