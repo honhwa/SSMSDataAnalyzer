@@ -43,6 +43,17 @@ namespace SsmsDataAnalyzer.Vsix.History
 
         public string Database => Entry.Database ?? string.Empty;
 
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 11: the Document column, and
+        /// the value <c>doc:</c>/<c>closed:</c> search on (Core's HistoryFilter, §8.6a).</summary>
+        public string DocumentName => Entry.DocumentName ?? string.Empty;
+
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 9: shown only once "Group
+        /// identical" is on and this row stands for more than one execution (Core sets
+        /// GroupCount to 1 whenever grouping is off, per §8.6a).</summary>
+        public string GroupCountText => Entry.GroupCount > 1
+            ? "×" + Entry.GroupCount.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+
         public string DurationOutcomeText
         {
             get

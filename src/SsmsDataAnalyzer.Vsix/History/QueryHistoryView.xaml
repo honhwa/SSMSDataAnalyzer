@@ -48,11 +48,16 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="120" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="SearchTextBox" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0"
                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="sql: server: database: (or db:) starred:true error:true — bare words match the query text; &quot;quoted phrases&quot; match as one term." />
-            <ComboBox Grid.Column="1" Width="140" VerticalAlignment="Center"
+                     ToolTip="sql: server: database: (or db:) doc: starred:true error:true closed:true — bare words match the query text; &quot;quoted phrases&quot; match as one term." />
+            <!-- docs/query-history-plan.md §4 Phase 2 item 9: off by default. -->
+            <CheckBox Grid.Column="1" Content="Group identical" VerticalAlignment="Center" Margin="0,0,12,0"
+                      IsChecked="{Binding GroupIdenticalText}"
+                      ToolTip="Collapse executions with identical query text; each row shows the newest run and how many it stands for." />
+            <ComboBox Grid.Column="2" Width="140" VerticalAlignment="Center"
                       ItemsSource="{Binding DateRangeOptions}" SelectedItem="{Binding SelectedDateRange}" />
         </Grid>
 
@@ -84,9 +89,12 @@
                     <MenuItem Header="Open in new query window" Click="OpenMenuItem_Click" />
                     <MenuItem Header="Insert at cursor" Click="InsertMenuItem_Click" />
                     <MenuItem Header="Copy" Click="CopyMenuItem_Click" />
+                    <MenuItem Header="Copy with header" Click="CopyWithHeaderMenuItem_Click" />
                     <Separator />
                     <MenuItem Header="Star/unstar" Click="StarMenuItem_Click" />
                     <MenuItem Header="Delete" Click="DeleteMenuItem_Click" />
+                    <Separator />
+                    <MenuItem Header="Find entries for this database" Click="FindForDatabaseMenuItem_Click" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
@@ -101,7 +109,13 @@
                 <DataGridTextColumn Header="When" Binding="{Binding WhenText, Mode=OneWay}" Width="150" />
                 <DataGridTextColumn Header="Server" Binding="{Binding Server, Mode=OneWay}" Width="140" />
                 <DataGridTextColumn Header="Database" Binding="{Binding Database, Mode=OneWay}" Width="120" />
+                <!-- docs/query-history-plan.md §4 Phase 2 item 11: find what you ran in a tab
+                     you have since closed — doc:/closed: search on this column. -->
+                <DataGridTextColumn Header="Document" Binding="{Binding DocumentName, Mode=OneWay}" Width="120" />
                 <DataGridTextColumn Header="Duration" Binding="{Binding DurationOutcomeText, Mode=OneWay}" Width="110" />
+                <!-- docs/query-history-plan.md §4 Phase 2 item 9: how many runs this row
+                     stands for once "Group identical" is on; empty otherwise. -->
+                <DataGridTextColumn Header="Runs" Binding="{Binding GroupCountText, Mode=OneWay}" Width="45" />
                 <DataGridTextColumn Header="Query" Binding="{Binding FirstLine, Mode=OneWay}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>

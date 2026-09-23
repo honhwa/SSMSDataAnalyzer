@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -62,6 +64,22 @@ namespace SsmsDataAnalyzer.Vsix.History
             set
             {
                 _searchText = value ?? string.Empty;
+                OnPropertyChanged();
+                ScheduleReload();
+            }
+        }
+
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 9 -- off by default, bound to
+        /// a checkbox in the window. Core (HistoryStore.Query, §8.6a) collapses on exact text
+        /// and fills HistoryEntry.GroupCount once this is on.</summary>
+        private bool _groupIdenticalText;
+        public bool GroupIdenticalText
+        {
+            get => _groupIdenticalText;
+            set
+            {
+                if (_groupIdenticalText == value) return;
+                _groupIdenticalText = value;
                 OnPropertyChanged();
                 ScheduleReload();
             }
@@ -141,6 +159,13 @@ namespace SsmsDataAnalyzer.Vsix.History
             {
                 var filter = HistoryFilter.Parse(SearchText);
                 filter.DateRange = SelectedDateRange?.Value ?? HistoryDateRange.All;
+                filter.GroupIdenticalText = GroupIdenticalText;
+
+                // docs/query-history-plan.md §4 Phase 2 item 11 / §8.6a: OpenDocumentNames is
+                // read from DTE on the UI thread (never in Core) and handed in as plain data.
+                // ReloadAsync is already on the main thread at this point (the
+                // SwitchToMainThreadAsync above), so this costs nothing extra.
+                filter.OpenDocumentNames = await GetOpenDocumentNamesAsync().ConfigureAwait(true);
 
                 var selectedId = SelectedItem?.Id;
                 var entries = await QueryHistoryService.QueryAsync(filter, MaxResults).ConfigureAwait(true);
@@ -173,6 +198,40 @@ namespace SsmsDataAnalyzer.Vsix.History
             }
         }
 
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 11 / §8.6a: "Names of the query
+        /// documents currently open in SSMS ... read on the UI thread and handed in -- Core
+        /// never touches DTE." Never throws -- a failure here must degrade to "unknown" (an
+        /// empty set, which makes closed:/doc: terms match nothing rather than guessing), not
+        /// break the whole reload.</summary>
+        private async Task<System.Collections.Generic.ISet<string>> GetOpenDocumentNamesAsync()
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var names = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Package == null) return names;
+
+            try
+            {
+                var dte = await Package.GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                if (dte == null) return names;
+
+                var documents = dte.Documents;
+                if (documents == null) return names;
+
+                foreach (EnvDTE.Document doc in documents)
+                {
+                    // Same field QueryHistoryCapture records as DocumentName (document.Name,
+                    // e.g. "SQLQuery1.sql") -- must match for closed:/doc: to mean anything.
+                    if (!string.IsNullOrEmpty(doc?.Name)) names.Add(doc.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                ObjectExplorer.OeDiagnostics.Warn("Query history: could not read open document names (" + ex.GetType().Name + "); closed:/doc: search may be incomplete this reload.");
+            }
+
+            return names;
+        }
+
         // ---- actions (docs/query-history-plan.md §4 Phase 1 item 7) --------------------------
 
         public void ToggleStar(QueryHistoryEntryItem item)
@@ -184,6 +243,39 @@ namespace SsmsDataAnalyzer.Vsix.History
             QueryHistoryService.SetStarred(item.Id, newValue);
         }
 
+        /// <summary>One or many entries as clipboard text. Entry text is always copied
+        /// verbatim -- a history you cannot trust to be what you ran is worthless.</summary>
+        private static string JoinTexts(IEnumerable<QueryHistoryEntryItem> items, bool withHeader)
+        {
+            if (items == null) return string.Empty;
+
+            var builder = new System.Text.StringBuilder();
+            bool first = true;
+
+            foreach (var item in items)
+            {
+                if (item == null || string.IsNullOrEmpty(item.FullText)) continue;
+
+                if (!first)
+                {
+                    builder.AppendLine().AppendLine("GO").AppendLine();
+                }
+                first = false;
+
+                if (withHeader)
+                {
+                    var entry = item.Entry;
+                    builder.Append("-- Server: ").Append(string.IsNullOrEmpty(entry.Server) ? "(unknown)" : entry.Server).AppendLine();
+                    builder.Append("-- Database: ").Append(string.IsNullOrEmpty(entry.Database) ? "(unknown)" : entry.Database).AppendLine();
+                    builder.Append("-- Time: ").Append(entry.StartedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).AppendLine();
+                }
+
+                builder.Append(item.FullText);
+            }
+
+            return builder.ToString();
+        }
+
         public void Delete(QueryHistoryEntryItem item)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -193,19 +285,55 @@ namespace SsmsDataAnalyzer.Vsix.History
             QueryHistoryService.Delete(item.Id);
         }
 
-        public void Copy(QueryHistoryEntryItem item)
+        /// <summary>Copies every selected entry (plan §4 Phase 1 item 6: "the selected
+        /// entries' text"), newest-to-oldest as shown, separated by a blank line and GO so the
+        /// result pastes into a query window as runnable batches.</summary>
+        public void Copy(IEnumerable<QueryHistoryEntryItem> items)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (item == null || string.IsNullOrEmpty(item.FullText)) return;
+            string text = JoinTexts(items, withHeader: false);
+            if (string.IsNullOrEmpty(text)) return;
             try
             {
-                System.Windows.Clipboard.SetText(item.FullText);
+                System.Windows.Clipboard.SetText(text);
             }
             catch (Exception ex)
             {
                 // Clipboard can be held by another app -- never a crash, and never log the text.
                 ObjectExplorer.OeDiagnostics.Error("Query history: copy to clipboard failed (clipboard may be in use)", ex);
             }
+        }
+
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 10 -- "Copy with header": server
+        /// / database / time as a leading SQL comment, then the query, exactly as recorded.</summary>
+        public void CopyWithHeader(IEnumerable<QueryHistoryEntryItem> items)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            string text = JoinTexts(items, withHeader: true);
+            if (string.IsNullOrEmpty(text)) return;
+
+            try
+            {
+                System.Windows.Clipboard.SetText(text);
+            }
+            catch (Exception ex)
+            {
+                // Same "clipboard can be held by another app -- never a crash, never log the
+                // text" rule as Copy.
+                ObjectExplorer.OeDiagnostics.Error("Query history: copy with header to clipboard failed (clipboard may be in use)", ex);
+            }
+        }
+
+        /// <summary>docs/query-history-plan.md §4 Phase 2 item 10 -- "Find entries for this
+        /// database": puts db:&lt;that database&gt; in the search box (quoted when it contains
+        /// whitespace, so HistoryFilter's tokenizer keeps it as one term).</summary>
+        public void FindEntriesForThisDatabase(QueryHistoryEntryItem item)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (item == null || string.IsNullOrEmpty(item.Database)) return;
+
+            string value = item.Database.IndexOf(' ') >= 0 ? "\"" + item.Database + "\"" : item.Database;
+            SearchText = "db:" + value;
         }
 
         public async Task InsertAtCursorAsync(QueryHistoryEntryItem item)

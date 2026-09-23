@@ -406,6 +406,8 @@ and you can be specific:
 | `db:Finances` | queries run against that database (`database:` works too) |
 | `starred:true` | only the ones you starred |
 | `error:true` | only the ones that failed |
+| `doc:SQLQuery3` | queries run from that query tab |
+| `closed:true` | queries you ran in a tab that is no longer open |
 
 Terms combine, so `db:Finances create view` finds both. There's also a date filter — Today, Last 7
 days, Last 30 days, All.
@@ -419,6 +421,16 @@ days, Last 30 days, All.
 | **Copy** | The query text to the clipboard (Ctrl+C works too) |
 | **☆ Star** | Keeps an entry forever — starred entries are never removed by the retention period |
 | **Delete** / **Clear all history** | Removes one entry, or everything |
+
+Select several rows and **Copy** takes them all, separated by `GO`. **Copy with header** adds the
+server, database and time as comment lines above each query. Right-click a row for all of these,
+plus **Find entries for this database**.
+
+**Group identical** (the checkbox above the list) collapses repeated runs of the same text into a
+single row, showing the most recent one and how many times you ran it (×3). It is off by default.
+
+**The toolbar:** switch on **SSMS Data Analyzer** under **View → Toolbars** for a Query History
+button you can reach in one click.
 
 ### Your history is encrypted
 

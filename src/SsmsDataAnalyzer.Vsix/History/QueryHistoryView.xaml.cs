@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -45,7 +46,7 @@ namespace SsmsDataAnalyzer.Vsix.History
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (Keyboard.FocusedElement is TextBox) return; // let the preview/search box's own Ctrl+C win
-            ViewModel.Copy(ViewModel.SelectedItem);
+            CopySelected();
         }
 
         private void HistoryGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -95,10 +96,33 @@ namespace SsmsDataAnalyzer.Vsix.History
         private void CopyButton_Click(object sender, RoutedEventArgs e) { ThreadHelper.ThrowIfNotOnUIThread(); CopySelected(); }
         private void CopyMenuItem_Click(object sender, RoutedEventArgs e) { ThreadHelper.ThrowIfNotOnUIThread(); CopySelected(); }
 
+        /// <summary>Every selected row, in the order shown -- not just the focused one.</summary>
+        private IEnumerable<QueryHistoryEntryItem> Selection()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var selected = HistoryGrid.SelectedItems.Cast<QueryHistoryEntryItem>().ToList();
+            if (selected.Count > 0) return selected;
+            return ViewModel.SelectedItem == null
+                ? Enumerable.Empty<QueryHistoryEntryItem>()
+                : new[] { ViewModel.SelectedItem };
+        }
+
         private void CopySelected()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            ViewModel.Copy(ViewModel.SelectedItem);
+            ViewModel.Copy(Selection());
+        }
+
+        private void CopyWithHeaderMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ViewModel.CopyWithHeader(Selection());
+        }
+
+        private void FindForDatabaseMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ViewModel.FindEntriesForThisDatabase(ViewModel.SelectedItem);
         }
 
         private void StarButton_Click(object sender, RoutedEventArgs e) { ThreadHelper.ThrowIfNotOnUIThread(); StarSelected(); }

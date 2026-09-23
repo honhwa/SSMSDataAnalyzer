@@ -1,7 +1,9 @@
 # Query History — development plan
 
 Status: **Phase 1 shipped and confirmed working in SSMS (v0.19.4, 2026-09-23).** The interface
-is in §8. Phase 2 (§4) has not been started. Open decisions are in §9.
+is in §8. **Phase 2 items 8–11 built and released as v0.20.0 (2026-09-23), awaiting a live
+check** — the toolbar in particular cannot be verified anywhere but in SSMS. Phase 3 (§4) has not
+been started. Open decisions are in §9.
 
 **Live-fix log — what Phase 1 cost after "it builds":** four releases, none of which could record
 a single query, and none of which any unit test could have caught.

@@ -11,7 +11,29 @@
   <Extern href="vsshlids.h" />
 
   <Commands package="guidSsmsDataAnalyzerPackage">
+    <Menus>
+      <!--
+        docs/query-history-plan.md §4 Phase 2 item 8 / §6.1: our OWN toolbar, switched on under
+        View → Toolbars → "SSMS Data Analyzer". This is the supported VS route and, per §6.1,
+        cannot break — unlike the SQL Editor toolbar route, which was investigated and
+        abandoned (its group ID lives in a compressed CFCT blob nobody on this team could read).
+      -->
+      <Menu guid="guidSsmsDataAnalyzerCommandSet" id="QueryHistoryToolbar" priority="0x0000" type="Toolbar">
+        <CommandFlag>DefaultDocked</CommandFlag>
+        <Strings>
+          <ButtonText>SSMS Data Analyzer</ButtonText>
+          <CommandName>SsmsDataAnalyzer.Toolbar</CommandName>
+        </Strings>
+      </Menu>
+    </Menus>
+
     <Groups>
+      <!-- The one group on our own toolbar (above); holds cmdidQueryHistory via a
+           CommandPlacement below — a command is defined once under Buttons, never twice. -->
+      <Group guid="guidSsmsDataAnalyzerCommandSet" id="QueryHistoryToolbarGroup" priority="0x0000">
+        <Parent guid="guidSsmsDataAnalyzerCommandSet" id="QueryHistoryToolbar" />
+      </Group>
+
       <Group guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" priority="0x0600">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
       </Group>
@@ -71,6 +93,12 @@
       -->
       <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidQueryHistory" priority="0x0130" type="Button">
         <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
+        <!-- Phase 2 item 8: reuses the project's one existing icon resource (Resources\DataAnalyzer.ico,
+             same guidImages/bmpAnalyzeData pair cmdidAnalyzeData already uses) rather than adding
+             a new image resource, so the toolbar button (placed via CommandPlacement below) has
+             something other than blank space. -->
+        <Icon guid="guidImages" id="bmpAnalyzeData" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
         <Strings>
           <ButtonText>Query History...</ButtonText>
           <CanonicalName>SsmsDataAnalyzer.QueryHistory</CanonicalName>
@@ -251,6 +279,13 @@
     <CommandPlacement guid="guidSsmsDataAnalyzerCommandSet" id="cmdidScriptObjectAsAlter" priority="0x0230">
       <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
     </CommandPlacement>
+
+    <!-- Phase 2 item 8: puts the already-defined cmdidQueryHistory button on our own toolbar
+         too, alongside its existing Tools-menu placement — same "second location via
+         CommandPlacement, not a second Button" rule as everything else in this section. -->
+    <CommandPlacement guid="guidSsmsDataAnalyzerCommandSet" id="cmdidQueryHistory" priority="0x0100">
+      <Parent guid="guidSsmsDataAnalyzerCommandSet" id="QueryHistoryToolbarGroup" />
+    </CommandPlacement>
   </CommandPlacements>
 
   <!--
@@ -286,6 +321,9 @@
       <IDSymbol name="cmdidScriptObjectAsAlter" value="0x0302" />
       <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->
       <IDSymbol name="cmdidQueryHistory" value="0x0400" />
+      <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->
+      <IDSymbol name="QueryHistoryToolbar" value="0x1060" />
+      <IDSymbol name="QueryHistoryToolbarGroup" value="0x1061" />
     </GuidSymbol>
 
     <!--
