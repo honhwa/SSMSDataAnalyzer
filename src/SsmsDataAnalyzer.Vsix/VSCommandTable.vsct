@@ -78,7 +78,7 @@
     <Buttons>
       <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidAnalyzeData" priority="0x0100" type="Button">
         <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
-        <Icon guid="guidImages" id="bmpAnalyzeData" />
+        <Icon guid="guidImageCatalog" id="imgDataTable" />
         <CommandFlag>IconIsMoniker</CommandFlag>
         <Strings>
           <ButtonText>Analyze Data...</ButtonText>
@@ -93,11 +93,9 @@
       -->
       <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidQueryHistory" priority="0x0130" type="Button">
         <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
-        <!-- Phase 2 item 8: reuses the project's one existing icon resource (Resources\DataAnalyzer.ico,
-             same guidImages/bmpAnalyzeData pair cmdidAnalyzeData already uses) rather than adding
-             a new image resource, so the toolbar button (placed via CommandPlacement below) has
-             something other than blank space. -->
-        <Icon guid="guidImages" id="bmpAnalyzeData" />
+        <!-- Phase 2 item 8: VS's own "History" moniker, so the toolbar button (placed via
+             CommandPlacement below) carries a themed icon rather than blank space. -->
+        <Icon guid="guidImageCatalog" id="imgHistory" />
         <CommandFlag>IconIsMoniker</CommandFlag>
         <Strings>
           <ButtonText>Query History...</ButtonText>
@@ -243,9 +241,6 @@
       </Button>
     </Buttons>
 
-    <Bitmaps>
-      <Bitmap guid="guidImages" href="Resources\DataAnalyzer.ico" usedList="bmpAnalyzeData" />
-    </Bitmaps>
   </Commands>
 
   <CommandPlacements>
@@ -340,8 +335,24 @@
     <!-- SSMS's "SQL Query Editor" editor factory (SQLEditors.pkgdef). Key-binding scope only. -->
     <GuidSymbol name="guidSqlQueryEditorFactory" value="{B5A506EB-11BE-4782-9A18-21265C2CA0B4}" />
 
-    <GuidSymbol name="guidImages" value="{d3f2a1b0-6c9e-4d7a-8b1c-5e2f9a0d4c11}">
-      <IDSymbol name="bmpAnalyzeData" value="1" />
+    <!--
+      Visual Studio's own image catalog (KnownMonikers). Using it means our buttons get
+      themed, DPI-correct icons that already look right in light and dark, with nothing
+      shipped in the .vsix.
+
+      The GUID and both IDs were read from SSMS 22's OWN copy of
+      Microsoft.VisualStudio.ImageCatalog.dll by reflecting over KnownImageIds, not guessed
+      from documentation. History = 1499, DataTable = 887.
+
+      v0.21.2: the previous declaration paired IconIsMoniker (which means "the Icon guid/id
+      below is a MONIKER") with a <Bitmap> resource pointing at an .ico. Those are mutually
+      exclusive, so VS looked for a moniker that did not exist and drew nothing: the toolbar
+      button appeared blank (field report). The <Bitmaps> block is gone with it: under
+      IconIsMoniker it was never consulted.
+    -->
+    <GuidSymbol name="guidImageCatalog" value="{ae27a6b0-e345-4288-96df-5eaf394ee369}">
+      <IDSymbol name="imgHistory" value="1499" />
+      <IDSymbol name="imgDataTable" value="887" />
     </GuidSymbol>
   </Symbols>
 

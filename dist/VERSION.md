@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.21.1**
+**`SsmsDataAnalyzer.vsix` — version 0.21.2**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.21.2** — **The toolbar button has an icon.** It was declared two contradictory ways at once — "this icon is a built-in Visual Studio image" plus a pointer to a file resource — so SSMS looked for an image that did not exist and drew nothing. Both it and **Analyze Data...** now use Visual Studio's own icons (a clock with an arrow for history, a table for Analyze Data), which are themed and sharp at any display scaling, and add nothing to the download.
 
 **0.21.1** — Export finished off: **Export selected…** on the right-click menu exports just the rows you picked; the confirmation says how many entries it is about to write; a grouped row's block now states how many runs it stands for (it used to export one block and say nothing about the rest); and the file notes it when the list hit the 5,000-entry display cap.
 
