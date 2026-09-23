@@ -120,6 +120,10 @@ namespace SsmsDataAnalyzer.Vsix
             await ResultsGrid.AggregateSelectionCommand.InitializeAsync(this);
             await History.QueryHistoryCommand.InitializeAsync(this);
 
+            // On the UI thread: cache the option values the background history writer needs.
+            // GetDialogPage cannot be called from the writer thread (COMException).
+            History.QueryHistoryService.RefreshOptionsSnapshot();
+
             // Query-editor "Paste as SQL IN (...)". Registered on the package's own command
             // service, like every other command here. Unlike the results-grid features this
             // touches no SSMS-build-specific API — the T-SQL editor is a standard VS code

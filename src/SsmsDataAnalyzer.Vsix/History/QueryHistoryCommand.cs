@@ -58,6 +58,10 @@ namespace SsmsDataAnalyzer.Vsix.History
                     return;
                 }
 
+                // Still on the UI thread: pick up any options change before the window (whose
+                // load runs on the thread pool) touches the store.
+                QueryHistoryService.RefreshOptionsSnapshot();
+
                 pane.Initialize(_package);
             }).FileAndForget("SsmsDataAnalyzer/QueryHistory/QueryHistoryCommand/Execute");
         }

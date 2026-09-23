@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.19.3**
+**`SsmsDataAnalyzer.vsix` — version 0.19.4**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.19.4** — **Query History actually records now.** Opening the history file read the retention setting, and reading a setting is only allowed on SSMS's UI thread — but the history file opens on a background thread, so it threw (`COMException`) every time. The key file had already been written by then, which is why the folder existed but never got any entries. The setting is now read on the UI thread and cached. Also hardened: our own diagnostic logging can no longer throw from a background thread, which would have killed the writer and stopped recording for the session.
 
 **0.19.3** — Query History diagnostics now distinguish **queued** from **written**, and report whether the history file could be opened at all. 0.19.2 said "5 recorded" while nothing had reached the disk, which made a broken setup look healthy. The line under an empty list now reads, for example, *"5 executions seen, 5 queued, 0 written. History file: could not be opened (CryptographicException)."* Also: a retention setting of 0 days is now treated as "keep everything" rather than deleting the whole history at startup.
 

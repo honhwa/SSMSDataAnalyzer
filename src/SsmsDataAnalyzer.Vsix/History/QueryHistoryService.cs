@@ -31,6 +31,15 @@ namespace SsmsDataAnalyzer.Vsix.History
         private static readonly object InitLock = new object();
         private static readonly BlockingCollection<Action> WriteQueue = new BlockingCollection<Action>();
 
+        // Options are read through GetDialogPage, which is UI-thread-only: calling it from the
+        // writer thread or the thread pool throws COMException. LoadCore runs on exactly those
+        // threads, and until v0.19.4 it read the retention option directly -- so initialization
+        // threw AFTER key.bin had been written, _initFailed stuck for the session, and every
+        // append was silently dropped while the window showed an empty list (field report:
+        // "3 executions seen, 3 queued, 0 written. History file: could not be opened
+        // (COMException)"). The value is now snapshotted on the UI thread instead.
+        private static volatile int _retentionDaysSnapshot = 30;
+
         private static Thread _writerThread;
         private static HistoryStore _store;
         private static HistoryKeyStore _keyStore;
@@ -49,6 +58,26 @@ namespace SsmsDataAnalyzer.Vsix.History
         /// the caller knows (QueryHistoryCapture builds it, including Duration/Outcome/RowCount
         /// when the optional completion listener supplied them in time).
         /// </summary>
+        /// <summary>
+        /// Reads the option values that background work needs, on the UI thread, and caches
+        /// them. Call it from the UI thread whenever the options may have changed -- package
+        /// initialization and opening the Query History window both do. Never call
+        /// OptionsAccessor from the writer thread or the thread pool instead: GetDialogPage is
+        /// UI-thread-only and throws COMException elsewhere.
+        /// </summary>
+        public static void RefreshOptionsSnapshot()
+        {
+            try
+            {
+                _retentionDaysSnapshot = OptionsAccessor.GetQueryHistoryRetentionDays();
+            }
+            catch (Exception ex)
+            {
+                // Keep the previous/default value; a bad options read must never break history.
+                ObjectExplorer.OeDiagnostics.Warn("Query history: could not read the retention option (" + ex.GetType().Name + "); keeping the previous value.");
+            }
+        }
+
         public static void Capture(HistoryEntry entry)
         {
             if (entry == null) return;
@@ -240,7 +269,8 @@ namespace SsmsDataAnalyzer.Vsix.History
                 _store.Changed += (s, e) => Changed?.Invoke(null, EventArgs.Empty);
                 _store.Load();
 
-                int retentionDays = OptionsAccessor.GetQueryHistoryRetentionDays();
+                // Snapshot only -- never OptionsAccessor from here (see _retentionDaysSnapshot).
+                int retentionDays = _retentionDaysSnapshot;
 
                 // A retention of 0 (or less) would mean "everything older than right now", i.e.
                 // delete the entire history on startup. That is never what someone means by it,
