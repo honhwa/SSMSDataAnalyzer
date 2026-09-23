@@ -1,9 +1,13 @@
 # Query History — development plan
 
-Status: **Phase 1 shipped and confirmed working in SSMS (v0.19.4, 2026-09-23).** The interface
-is in §8. **Phase 2 items 8–11 built and released as v0.20.0 (2026-09-23), awaiting a live
-check** — the toolbar in particular cannot be verified anywhere but in SSMS. Phase 3 (§4) has not
-been started. Open decisions are in §9.
+Status: **complete.** Phase 1 shipped and confirmed in SSMS (v0.19.4), Phase 2 shipped and
+confirmed (v0.20.0), and the export followed in v0.21.0. The interface is in §8; open decisions
+are in §9.
+
+**Importing Redgate’s `SqlHistory.db` was dropped (user, 2026-09-23)** and is not planned. It
+would have needed a hand-written read-only SQLite parser — loading a SQLite provider in-process
+risks a DLL conflict with the copies SSMS already hosts (§3) — and starting the history fresh
+turned out to be fine. There is nothing outstanding on this feature.
 
 **Live-fix log — what Phase 1 cost after "it builds":** four releases, none of which could record
 a single query, and none of which any unit test could have caught.
@@ -201,16 +205,8 @@ In both cases, the query window itself is just as exposed.
     comment), Star, Delete, Find entries for this database.
 11. **Re-open a closed, unsaved tab:** list the documents whose last execution came from a
     tab that no longer exists. This is limited to executed text, never unsaved edits.
-
-### Phase 3 — optional
-
-12. **Import from Redgate SQL Prompt**
-    (`%LOCALAPPDATA%\Red Gate\SQL Prompt 11\SqlHistory.db`, a SQLite database):
-    - A one-time import.
-    - It needs a SQLite reader. Use an **out-of-process** helper or a read-only file copy
-      parsed with a small reader, to avoid the in-process SQLite conflict from §3.
-    - Only if you really want it (D6).
-13. **Export** the filtered list to a `.sql` file (one block per entry, with a header comment).
+12. **Export** the filtered list to a `.sql` file (one block per entry, with a header comment).
+    Shipped in v0.21.0.
 
 ## 5. Architecture
 
@@ -484,5 +480,5 @@ later ungrouped queries.
 | D3 | Record executions only, or also unsaved edits like Redgate? | Executions only |
 | D4 | Group identical texts by default? | Off by default, toggle in the window |
 | D5 | Password/secret handling | **Decided (user, 2026-09-23):** encryption at rest is enough. Queries are stored verbatim, passwords included — no redaction, no skipping. Plus excluded-servers list, crypto-shred on Clear all, user-only folder ACL |
-| D6 | Import Redgate `SqlHistory.db` | Phase 3, only if you want it |
+| D6 | Import Redgate `SqlHistory.db` | **Decided (user, 2026-09-23): no.** Not planned — a fresh history is fine, and it would have cost a hand-written SQLite parser |
 | D7 | Window style | Dockable, persistent tool window (not a popup) |
