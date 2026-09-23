@@ -12,10 +12,12 @@ Useful if you need to answer questions like:
 - *How many different values does this field actually have?*
 - *This ID points at another table — what's the actual record behind it?*
 - *These two rows look the same — what's actually different between them?*
+- *What was that query I ran an hour ago, in the tab I've since closed?*
 
-It also adds a few things SSMS itself doesn't have: searching query results, peeking at a linked
-record, comparing rows side by side, adding up a selection, turning a list of values into a
-SQL `IN (...)` clause, and scripting the object under your cursor with **F12** or **Ctrl+click**.
+It also adds a few things SSMS itself doesn't have: a searchable history of the queries you have
+run, searching query results, peeking at a linked record, comparing rows side by side, adding up
+a selection, turning a list of values into a SQL `IN (...)` clause, and scripting the object
+under your cursor with **F12** or **Ctrl+click**.
 
 ## Everything it adds, at a glance
 
@@ -178,8 +180,10 @@ inside the peek window works too: clicking it follows the link **in the same win
 deeper, and **← Back** (or **Alt+Left**, or **Backspace**) walks back out again. So you can
 explore a chain of foreign keys without opening a single query tab, and without losing your way.
 The icon is a magnifier there rather than the "open in new window" one, because that is what it
-does. If you do want a query tab, right-click the cell → **Go to source…**. Go to source and Peek source are just two ways to look at the same result
-— picking one never changes what the other does.
+does. If you do want a query tab, right-click the cell → **Go to source…**.
+
+Go to source and Peek source are just two ways to look at the same result — picking one never
+changes what the other does.
 
 **It never guesses.** The option is only offered when the link is certain. It is not offered for:
 
@@ -203,8 +207,19 @@ record.
 - **With a keyboard shortcut** it uses the grid's current cell (the one you last clicked or
   moved to with the arrow keys). If several cells are selected, the status bar says which row's
   value it used.
-- **Queries with #temp tables** work too: when SQL Server can't describe the query (it can't see your session's temp tables), the extension reads the query itself — columns written as `alias.Column` from a real table get links, and **`SELECT FA.*` works as well**: the table's real column list is read from the catalog and expanded. It is only used when the expanded names match the grid's headers exactly, so a table that has changed since you ran the query makes it decline rather than mislabel a column. Temp-table columns and expressions still get no link, and a bare `*` needs a single-table query. The status bar says "resolved from the query text".
-- **SSMS's query shortcuts** work too: select a table name, press **Ctrl+3** (`SELECT TOP(100) * FROM`), and the grid's columns get source links even though the query SSMS ran never appeared in your editor. Shortcuts that produce a different shape — **Ctrl+4** (`SELECT COUNT(1) FROM`), **Alt+F1** (`sp_help`) — simply get no links, because their columns are not the table's.
+- **Queries with #temp tables** work too: when SQL Server can't describe the query (it can't see
+  your session's temp tables), the extension reads the query itself. Columns written as
+  `alias.Column` from a real table get links, and **`SELECT FA.*` works as well** — the table's
+  real column list is read from the catalog and expanded. That expansion is only used when the
+  resulting names match the grid's headers exactly, so a table that has changed since you ran
+  the query makes it decline rather than mislabel a column. Temp-table columns and expressions
+  still get no link, and a bare `*` needs a single-table query. The status bar says "resolved
+  from the query text".
+- **SSMS's query shortcuts** work too: select a table name, press **Ctrl+3**
+  (`SELECT TOP(100) * FROM`), and the grid's columns get source links even though the query SSMS
+  ran never appeared in your editor. Shortcuts that produce a different shape — **Ctrl+4**
+  (`SELECT COUNT(1) FROM`), **Alt+F1** (`sp_help`) — simply get no links, because their columns
+  are not the table's.
 - **Several statements run together** work too — each grid is matched to the statement that
   produced it. If two of them return the same columns from *different* tables, it declines
   rather than guess; run just the statement you want.
@@ -613,6 +628,14 @@ It only ever **reads**. It never writes, updates or deletes anything.
   finished loading yet.
 - **A pivot shows fewer rows than you selected** — you hit the pivot row limit; the banner says
   so. Raise it in [Settings](#settings).
+- **Query History is empty** — open it and read the line under the list: it says how many
+  executions were seen, how many were written, and the reason for the last one that was not.
+  Queries run from a query shortcut (Ctrl+3, Alt+F1, …) are never recorded — see
+  [Feature 8](#feature-8--query-history).
+- **A keyboard shortcut does nothing** — check it is actually assigned in **Tools → Options… →
+  Environment → Keyboard** (search `SsmsDataAnalyzer`). A default is skipped when the key was
+  already in use on your machine. Commands that act on a cell or a selection say what they
+  needed on the status bar.
 
 ---
 
@@ -625,9 +648,10 @@ It only ever **reads**. It never writes, updates or deletes anything.
 src/SsmsDataAnalyzer.Core/   netstandard2.0 — profiling engine, pivot, aggregate and result-shape logic, zero VS dependencies
 src/SsmsDataAnalyzer.Cli/    net8.0 — same engine, scriptable from a terminal
 src/SsmsDataAnalyzer.Vsix/   net472 — the SSMS 22 extension
-tests/                       xUnit — 161 tests, unit + integration
+tests/                       xUnit — ~390 tests, unit + integration
 tools/seed/                  seeded test database + verified ground truth
-docs/                        reverse-engineering notes on SSMS's internals, feature plans (pivot-plan.md)
+docs/                        reverse-engineering notes on SSMS's internals, and one plan per feature
+                             (pivot-plan.md, query-history-plan.md, *-api.md spike reports)
 spikes/OeProbe/              metadata/IL inspector used to produce those notes
 dist/                        the released .vsix and VERSION.md
 ```
@@ -675,6 +699,19 @@ computes them. A composite foreign key offers a table jump but *not* a value jum
 filtering on half a composite key returns plausible-but-wrong rows. Results-grid jumps describe
 every `GO` batch and require them to agree on the source column before offering a link.
 
+**The grid's own headers are the judge.** When SQL Server cannot describe a query (a `#temp`
+table it cannot see from our connection), the source of each column is read from the query text
+instead — including expanding `SELECT alias.*` from the catalog. None of that is trusted on its
+own: the reconstructed column list must match the grid's actual headers one for one, by count
+and by name, or the whole thing declines. That is what makes it safe to read a bare table name
+left over from a query shortcut as `SELECT * FROM <name>`: if the guess is wrong, the headers
+disagree and nothing is offered.
+
+**Encrypted at rest, honest in content.** Query history is encrypted before it touches the disk,
+under a key held by Windows for the current account. Queries are stored exactly as they ran,
+passwords included — a history you cannot trust to be what you ran would be worth less than no
+history — and the README says plainly what that does not protect against.
+
 **Nothing is silently partial.** Cancellation keeps completed work. A pass-1 timeout returns the
 metadata it has plus a warning rather than discarding the profile. A capped search reports
 `10000+`, and a capped pivot says how many rows it left out.
@@ -683,6 +720,8 @@ metadata it has plus a warning rather than discarding the profile. A capped sear
 a password, and nothing that can contain a cell value is written to the ActivityLog.
 
 `CONTRACT.md` holds the frozen interfaces and the amendment history behind each of these
-decisions; `PLAN.md` has the roadmap and `docs/pivot-plan.md` the pivot feature's plan and team.
+decisions; `PLAN.md` has the roadmap. Each larger feature has its own plan under `docs/` —
+`pivot-plan.md` and `query-history-plan.md` — and the `*-api.md` files are spike reports on
+SSMS's internals, each one marked with how confident it is and what it could not establish.
 
 </details>
