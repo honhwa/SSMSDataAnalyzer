@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.24.0**
+**`SsmsDataAnalyzer.vsix` — version 0.25.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.25.0** — **Every feature now has a keyboard shortcut out of the box.** They share one chord: hold **Ctrl+Alt** and press **Q**, then a letter — **H** history, **F** find, **G** go to source, **P** peek, **V** pivot, **A** aggregate, **D** analyze data, **I**/**N** paste as IN, **S** script object. Press Ctrl+Alt+Q and SSMS lists them. One chord is claimed instead of ten separate keys, so there is one chance of clashing with something you use rather than ten. **Nothing you have configured is overwritten:** the defaults are applied once, only to commands with no shortcut at all, and never onto a key already used by something else — so an upgrade cannot reset your own bindings, and a default you delete stays deleted.
 
 **0.24.0** — **The Peek window can go back.** Following a foreign key inside a peek replaced the record with no way to return, so you could walk forward through links and end up stuck on the last one. There is now a **← Back** button (also **Alt+Left** or **Backspace**), stepping back one record at a time through everything that window has shown. Closing the peek ends the trail, so the next one starts fresh.
 

@@ -292,8 +292,22 @@
     (scope "SQL Query Editor"). ScriptObjectController also intercepts Edit.GoToDefinition inside
     SQL query windows as a fallback (docs/script-object-api.md).
   -->
+  <!--
+    Only F12 is a command-table default. The Ctrl+Alt+Q chord shortcuts are applied at RUNTIME
+    by DefaultShortcuts.cs instead, once, and only onto commands that have no binding at all.
+    A .vsct KeyBinding is a default baked into the extension, and how the shell merges a NEW
+    default with a user's own customisation on upgrade is not something this project can verify
+    outside a running SSMS, so the safe version is the one that looks first and does nothing
+    when it finds an existing binding. See DefaultShortcuts.cs.
+  -->
   <KeyBindings>
+    <!--
+      F12 = Script object as ALTER, ONLY in SSMS's SQL Query Editor scope, so F12 keeps its
+      normal meaning everywhere else. Kept as it was; Ctrl+Alt+Q, S does the same thing for
+      anyone who would rather not have F12 taken at all.
+    -->
     <KeyBinding guid="guidSsmsDataAnalyzerCommandSet" id="cmdidScriptObjectAsAlter" editor="guidSqlQueryEditorFactory" key1="VK_F12" />
+
   </KeyBindings>
 
 

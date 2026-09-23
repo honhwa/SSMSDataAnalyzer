@@ -32,7 +32,7 @@ SQL `IN (...)` clause, and scripting the object under your cursor with **F12** o
 | **Script an object** — ALTER into a new window, or peek at its CREATE | In a query window, cursor on a table/view/procedure name → **F12**, or **Ctrl+click** the name |
 | **See what you ran earlier** — searchable history of every query you execute | **Tools → Query History…** |
 | **Settings** | **Tools → Options… → SSMS Data Analyzer** |
-| **Your own keyboard shortcuts** | **Tools → Options… → Environment → Keyboard** |
+| **Keyboard shortcuts** | **Ctrl+Alt+Q** then a letter — see [Keyboard shortcuts](#keyboard-shortcuts) |
 
 ---
 
@@ -488,26 +488,68 @@ If you'd rather not record something in the first place:
 
 ## Keyboard shortcuts
 
-The extension ships with **one** default shortcut: **F12 = Script object as ALTER**, and only
-inside SQL query windows (scope *SQL Query Editor*). To move or remove it, find
-`SsmsDataAnalyzer.ScriptObjectAsAlter` in the list below and change it there. Everything else has
-no default, so it can't take a key you already use. You can add your own:
+Everything has a shortcut out of the box. They all start with the same chord — hold
+**Ctrl+Alt** and press **Q**, let go, then press one letter:
+
+| Press | Does |
+|---|---|
+| **Ctrl+Alt+Q**, then **H** | **Query History…** |
+| **Ctrl+Alt+Q**, then **F** | **Find** in query results |
+| **Ctrl+Alt+Q**, then **G** | **Go to source** for the selected cell |
+| **Ctrl+Alt+Q**, then **P** | **Peek source** for the selected cell |
+| **Ctrl+Alt+Q**, then **V** | **Pivot** the selected rows |
+| **Ctrl+Alt+Q**, then **A** | **Aggregate** the selected cells |
+| **Ctrl+Alt+Q**, then **D** | **Analyze Data** for the table selected in Object Explorer |
+| **Ctrl+Alt+Q**, then **I** | **Paste as SQL IN (...)** |
+| **Ctrl+Alt+Q**, then **N** | **Paste as numeric SQL IN (...)** |
+| **Ctrl+Alt+Q**, then **S** | **Script object as ALTER** (same as F12) |
+| **F12** | **Script object as ALTER**, in query windows only |
+
+You don't have to memorise the letters: press **Ctrl+Alt+Q** and SSMS lists what can follow it.
+
+**Why one chord instead of ten separate keys?** A default that quietly steals a key you already
+use is worse than no default at all. This way the extension claims exactly **one** combination —
+`Ctrl+Alt+Q` — rather than ten chances to collide with something of yours. F12 is the one
+exception, and it applies only inside query windows, so it keeps its usual meaning everywhere
+else.
+
+**It never overrides a shortcut you have set.** The defaults are applied once, the first time a
+version with them starts, and only to commands that have **no** shortcut at all:
+
+- A shortcut you assigned yourself is left exactly as it is — upgrading never resets it.
+- A key already used by SSMS or another extension is left alone too, and that command simply
+  gets no default.
+- If you **delete** one of these defaults, it stays deleted; it is not put back on the next
+  start.
+
+(Check what actually happened in **Tools → Options… → Environment → Keyboard** — search
+`SsmsDataAnalyzer`.)
+
+Press one in the wrong place and nothing breaks: the status bar just says what it needed (a
+selected cell, a connected query window, and so on).
+
+### Changing them
 
 1. **Tools → Options… → Environment → Keyboard**
 2. Type `SsmsDataAnalyzer` in *Show commands containing* and pick a command.
-3. Leave *Use new shortcut in* on **Global**.
-4. Click into *Press shortcut keys*, press the combination you want, then **Assign**.
+3. Click into *Press shortcut keys*, press the combination you want, then **Assign**.
+   (*Remove* clears a default you don't want.)
+
+To give a command you use constantly a single keystroke instead of the chord, assign it here —
+SSMS warns you if the key is already used, which is the check this extension can't do for you.
 
 | Command | Name in the Keyboard list |
 |---|---|
+| Query History… | `SsmsDataAnalyzer.QueryHistory` |
 | Go to source for this value | `SsmsDataAnalyzer.GoToSourceForValue` — uses the cell selected in the results grid |
 | Peek source for this value | `SsmsDataAnalyzer.PeekSourceForValue` — uses the cell selected in the results grid |
 | Find… (in query results) | `SsmsDataAnalyzer.FindInResults` |
 | Pivot selected rows… | `SsmsDataAnalyzer.PivotRows` |
 | Aggregate selection… | `SsmsDataAnalyzer.AggregateSelection` — uses the cells selected in the results grid |
+| Analyze Data… | `SsmsDataAnalyzer.AnalyzeData` — uses the table selected in Object Explorer |
 | Paste as SQL IN (...) | `SsmsDataAnalyzer.PasteAsSqlIn` |
 | Paste as numeric SQL IN (...) | `SsmsDataAnalyzer.PasteAsNumericSqlIn` |
-| Script object as ALTER | `SsmsDataAnalyzer.ScriptObjectAsAlter` — **F12** in query windows by default; uses the name at the cursor |
+| Script object as ALTER | `SsmsDataAnalyzer.ScriptObjectAsAlter` — **F12** in query windows; uses the name at the cursor |
 
 ---
 

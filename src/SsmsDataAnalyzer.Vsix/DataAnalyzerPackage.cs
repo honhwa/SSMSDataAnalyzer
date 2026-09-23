@@ -120,6 +120,9 @@ namespace SsmsDataAnalyzer.Vsix
             await ResultsGrid.AggregateSelectionCommand.InitializeAsync(this);
             await History.QueryHistoryCommand.InitializeAsync(this);
 
+            // First run only, and never over an existing binding — see DefaultShortcuts.
+            Commands.DefaultShortcuts.ApplyOnce(this);
+
             // On the UI thread: cache the option values the background history writer needs.
             // GetDialogPage cannot be called from the writer thread (COMException).
             History.QueryHistoryService.RefreshOptionsSnapshot();
