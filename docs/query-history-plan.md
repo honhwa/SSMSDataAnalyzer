@@ -1,8 +1,29 @@
 # Query History — development plan
 
-Status: **in development (started 2026-09-23).** The interface is frozen in §8. Wave 1 is the
-spike (§6) plus the Core work; no UI code starts before the spike answers are in. Open
-decisions are in §9.
+Status: **Phase 1 shipped and confirmed working in SSMS (v0.19.4, 2026-09-23).** The interface
+is in §8. Phase 2 (§4) has not been started. Open decisions are in §9.
+
+**Live-fix log — what Phase 1 cost after "it builds":** four releases, none of which could record
+a single query, and none of which any unit test could have caught.
+
+| Build | Symptom | Cause |
+|---|---|---|
+| 0.19.0 | No folder at all | `HistoryKeyStore` wrote `key.bin` before anything created the directory. The in-memory test fake treated paths as opaque strings, so 353 green tests never saw it. The fake now throws the way Windows does, and `RealDiskHistoryTests` runs the real path against real files. |
+| 0.19.1 | Folder and key, no entries | Not diagnosable from outside: the only signal went to an ActivityLog SSMS does not write unless started with `/log`. |
+| 0.19.2 | "5 executions seen, 5 recorded", list empty | "Recorded" meant *handed to the writer queue*, not written — the diagnostics themselves made a broken store look healthy. Queued and written are now counted separately. |
+| 0.19.3 | "3 queued, 0 written. History file: could not be opened (COMException)" | **The real bug.** `LoadCore` runs on a background thread and read the retention option through `GetDialogPage`, which is UI-thread-only. It threw *after* `key.bin` was written, and `_initFailed` then stuck for the session. Options are now snapshotted on the UI thread. |
+
+**Rules taken from this, for anything that writes to disk from a VS package:**
+1. **Never read an option (or any `GetDialogPage`/shell service) off the UI thread.** Snapshot it
+   on the UI thread and hand the value to the background work.
+2. **A test double must not be more permissive than the real thing.** A fake with no directory
+   semantics hides exactly the bug it exists to catch.
+3. **Diagnostics must distinguish "accepted" from "done".** Counting the queue is not counting
+   the disk.
+4. **A silent feature needs a visible reason.** The window now states why it is empty; that
+   turned two rounds of guessing into two exact diagnoses.
+5. **Diagnostics must never throw.** `OeDiagnostics` reaches a shell service, and an exception
+   escaping the writer thread's catch block would have killed recording outright.
 
 ## 1. What it does
 
