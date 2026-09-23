@@ -58,13 +58,19 @@ namespace SsmsDataAnalyzer.Vsix.History
                 try
                 {
                     EnsureLoadedOnWriterThread();
-                    if (_initFailed) return;
+                    if (_initFailed)
+                    {
+                        QueryHistoryDiagnostics.WriteFailed("the history file could not be opened");
+                        return;
+                    }
                     _store.Append(entry);
+                    QueryHistoryDiagnostics.Written();
                 }
                 catch (Exception ex)
                 {
                     // Never the entry's Text/Server/Database -- OeDiagnostics must never see
                     // query text or literal values (project rule).
+                    QueryHistoryDiagnostics.WriteFailed(ex.GetType().Name);
                     ObjectExplorer.OeDiagnostics.Error("Query history: recording an execution failed", ex);
                 }
             });
@@ -235,17 +241,23 @@ namespace SsmsDataAnalyzer.Vsix.History
                 _store.Load();
 
                 int retentionDays = OptionsAccessor.GetQueryHistoryRetentionDays();
-                int removed = _store.Trim(retentionDays);
+
+                // A retention of 0 (or less) would mean "everything older than right now", i.e.
+                // delete the entire history on startup. That is never what someone means by it,
+                // and it would be unrecoverable, so treat it as "keep everything" instead.
+                int removed = retentionDays > 0 ? _store.Trim(retentionDays) : 0;
                 if (removed > 0)
                 {
                     ObjectExplorer.OeDiagnostics.Info("Query history: startup retention trim removed " + removed.ToString(System.Globalization.CultureInfo.InvariantCulture) + " expired entr" + (removed == 1 ? "y" : "ies") + ".");
                 }
 
                 _loaded = true;
+                QueryHistoryDiagnostics.StoreState("open");
             }
             catch (Exception ex)
             {
                 _initFailed = true;
+                QueryHistoryDiagnostics.StoreState("could not be opened (" + ex.GetType().Name + ")");
                 ObjectExplorer.OeDiagnostics.Error("Query history: failed to initialize (history is unavailable this session)", ex);
             }
         }

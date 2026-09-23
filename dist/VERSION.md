@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.19.2**
+**`SsmsDataAnalyzer.vsix` — version 0.19.3**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.19.3** — Query History diagnostics now distinguish **queued** from **written**, and report whether the history file could be opened at all. 0.19.2 said "5 recorded" while nothing had reached the disk, which made a broken setup look healthy. The line under an empty list now reads, for example, *"5 executions seen, 5 queued, 0 written. History file: could not be opened (CryptographicException)."* Also: a retention setting of 0 days is now treated as "keep everything" rather than deleting the whole history at startup.
 
 **0.19.2** — **Query History now says why it is empty**, instead of just showing nothing: open Tools → Query History… and the line under the list reports how many executions were seen, how many were recorded, and the reason for the last one that wasn't (never any query text, server or database name — the reasons are value-free). Also, an execution whose connection cannot be read is now still recorded, with the server left blank, rather than being dropped — except when an Excluded servers list is set, where not knowing the server means the exclusion can't be honoured, so it is deliberately skipped and says so.
 

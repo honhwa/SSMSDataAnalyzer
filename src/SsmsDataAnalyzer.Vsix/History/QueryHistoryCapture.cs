@@ -204,7 +204,7 @@ namespace SsmsDataAnalyzer.Vsix.History
             pending.Entry.DurationMs = durationMs;
             pending.Entry.RowCount = rowCount;
 
-            QueryHistoryDiagnostics.Recorded();
+            QueryHistoryDiagnostics.QueuedForWriting();
             QueryHistoryService.Capture(pending.Entry);
         }
 
