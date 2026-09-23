@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.23.0**
+**`SsmsDataAnalyzer.vsix` — version 0.24.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.24.0** — **The Peek window can go back.** Following a foreign key inside a peek replaced the record with no way to return, so you could walk forward through links and end up stuck on the last one. There is now a **← Back** button (also **Alt+Left** or **Backspace**), stepping back one record at a time through everything that window has shown. Closing the peek ends the trail, so the next one starts fresh.
 
 **0.23.0** — **Go to source and Peek now work on grids produced by SSMS's query shortcuts.** Select a table name, press **Ctrl+3** (`SELECT TOP(100) * FROM`), and the columns get source links — even though the query SSMS ran was composed by SSMS and never appeared in your editor. The selected name is read as `SELECT * FROM <name>` and checked against the grid: only if the table's real columns match the grid's headers exactly is anything reported. Shortcuts with a different shape, like **Ctrl+4** (`SELECT COUNT(1) FROM`) and **Alt+F1** (`sp_help`), therefore get no links rather than wrong ones.
 

@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -40,6 +41,21 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
 
         /// <summary>The single authoritative way PivotToolWindow (re)targets this view at a
         /// fresh pivot snapshot, with no FK engine.</summary>
+        /// <summary>Raised by the peek window's "Back" button. Pivot windows never show it.</summary>
+        internal event EventHandler BackRequested;
+
+        /// <summary>Shows the Back button (peek windows only) and sets whether it can be used.
+        /// Never called by pivot windows, so their toolbar is unchanged.</summary>
+        internal void SetBackAvailable(bool canGoBack)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            BackButton.Visibility = System.Windows.Visibility.Visible;
+            BackButton.IsEnabled = canGoBack;
+        }
+
+        private void BackButton_Click(object sender, System.Windows.RoutedEventArgs e) =>
+            BackRequested?.Invoke(this, EventArgs.Empty);
+
         internal void Bind(PivotResult result)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

@@ -175,7 +175,8 @@ no new query tab, nothing to clean up. Close it with **Esc** or its own **X** th
 seen what you needed. In a pivot window, the equivalent is **Peek source…** on a linked cell's
 right-click menu. Either way, if the peeked record itself has a linked column, the 🔗 icon
 inside the peek window works too, so you can follow a chain of foreign keys without ever
-opening a query tab. Go to source and Peek source are just two ways to look at the same result
+opening a query tab — and **← Back** (or **Alt+Left**, or **Backspace**) walks that chain back
+one record at a time, so following a link is never a one-way trip. Go to source and Peek source are just two ways to look at the same result
 — picking one never changes what the other does.
 
 **It never guesses.** The option is only offered when the link is certain. It is not offered for:

@@ -134,6 +134,16 @@
 
         <!-- Phase 2 toggles + column-name filter (plan §4 items 8-10). -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,4">
+            <!--
+                Peek only (collapsed by default, shown by PeekToolWindow): following a foreign
+                key inside a peek replaced the record with no way back, so you could walk
+                forward through links and never return (field report). Pivot windows never show
+                this, hence Visibility="Collapsed" here rather than in a style.
+            -->
+            <Button x:Name="BackButton" Content="&#x2190; Back" Padding="8,1" Margin="0,0,14,0"
+                    VerticalAlignment="Center" Visibility="Collapsed" IsEnabled="False"
+                    ToolTip="Back to the previous record (Alt+Left, or Backspace)"
+                    Click="BackButton_Click" />
             <CheckBox Content="Show only differing columns" IsChecked="{Binding ShowOnlyDiffering}" Margin="0,0,14,0" VerticalAlignment="Center" />
             <CheckBox Content="Hide all-NULL columns" IsChecked="{Binding HideAllNull}" Margin="0,0,14,0" VerticalAlignment="Center" />
             <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="0,0,4,0" />
