@@ -442,15 +442,25 @@ namespace SsmsDataAnalyzer.Vsix.History
         /// operation that takes history OUT of the encrypted store, and the resulting file is
         /// plain text with the queries (passwords included) exactly as they were run.
         /// </summary>
-        public bool ExportToFile(string path)
+        public bool ExportToFile(string path, IEnumerable<QueryHistoryEntryItem> only = null)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                var entries = new List<HistoryEntry>(Items.Count);
-                foreach (var item in Items) entries.Add(item.Entry);
+                var source = only ?? Items;
+                var entries = new List<HistoryEntry>();
+                foreach (var item in source)
+                {
+                    if (item != null) entries.Add(item.Entry);
+                }
 
-                string script = HistoryExport.ToSqlScript(entries, DateTime.Now, DescribeFilter());
+                string description = only != null
+                    ? "selected entries"
+                    : DescribeFilter() + (Items.Count >= MaxResults
+                        ? "   |   NOTE: the list is capped at " + MaxResults.ToString(CultureInfo.InvariantCulture) + " entries, so older matches are not included"
+                        : string.Empty);
+
+                string script = HistoryExport.ToSqlScript(entries, DateTime.Now, description);
 
                 // UTF-8 with BOM: SSMS opens .sql files as ANSI without one, which mangles any
                 // non-ASCII literal in an exported query.

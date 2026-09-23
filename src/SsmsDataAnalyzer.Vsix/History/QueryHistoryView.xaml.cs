@@ -155,17 +155,38 @@ namespace SsmsDataAnalyzer.Vsix.History
         private void ExportButton_Click(object sender, RoutedEventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            Export(onlySelection: false);
+        }
 
-            if (ViewModel.Items.Count == 0)
+        /// <summary>"Export selected..." on the right-click menu: the rows you picked, rather
+        /// than everything the filter matches.</summary>
+        private void ExportSelectedMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            Export(onlySelection: true);
+        }
+
+        private void Export(bool onlySelection)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var selection = onlySelection ? Selection().ToList() : null;
+            int count = onlySelection ? selection.Count : ViewModel.Items.Count;
+
+            if (count == 0)
             {
-                MessageBox.Show(Window.GetWindow(this), "There is nothing to export: no entries match the current filter.",
+                MessageBox.Show(Window.GetWindow(this),
+                    onlySelection ? "Select the entries you want to export first." : "There is nothing to export: no entries match the current filter.",
                     "Export query history", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             var confirm = MessageBox.Show(
                 Window.GetWindow(this),
-                "The exported .sql file is NOT encrypted. It will contain these queries exactly as you ran them, "
+                "Exporting " + count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + (count == 1 ? " entry." : " entries.")
+                + Environment.NewLine + Environment.NewLine
+                + "The exported .sql file is NOT encrypted. It will contain these queries exactly as you ran them, "
                 + "including any passwords typed into them, readable by anyone who can open the file."
                 + Environment.NewLine + Environment.NewLine
                 + "Export anyway?",
@@ -186,7 +207,7 @@ namespace SsmsDataAnalyzer.Vsix.History
 
             if (dialog.ShowDialog(Window.GetWindow(this)) == true)
             {
-                ViewModel.ExportToFile(dialog.FileName);
+                ViewModel.ExportToFile(dialog.FileName, selection);
             }
         }
 

@@ -89,6 +89,52 @@ namespace SsmsDataAnalyzer.Tests.History
             Assert.Contains("truncated", HistoryExport.ToSqlScript(new[] { entry }, Generated));
         }
 
+        [Fact]
+        public void GroupedEntry_SaysHowManyRunsItStandsFor()
+        {
+            var entry = Entry("SELECT 1");
+            entry.GroupCount = 3;
+
+            string script = HistoryExport.ToSqlScript(new[] { entry }, Generated);
+
+            Assert.Contains("Ran 3 times", script);
+            Assert.Contains("most recent", script);
+        }
+
+        [Fact]
+        public void UngroupedEntry_SaysNothingAboutRuns()
+        {
+            string script = HistoryExport.ToSqlScript(new[] { Entry("SELECT 1") }, Generated);
+            Assert.DoesNotContain("Ran ", script);
+        }
+
+        [Fact]
+        public void EveryNonCommentLine_ComesFromAQuery()
+        {
+            // The whole safety property of the format in one test: nothing the header carries
+            // can ever end up outside a comment, whatever an entry's fields contain.
+            var entry = new HistoryEntry
+            {
+                Id = Guid.NewGuid(),
+                StartedUtc = new DateTime(2026, 9, 23, 10, 0, 0, DateTimeKind.Utc),
+                Server = "S\r\nDROP TABLE a",
+                Database = "D*/ DROP TABLE b",
+                DocumentName = "doc\nDROP TABLE c",
+                Text = "SELECT 1",
+                GroupCount = 2,
+                TextTruncated = true
+            };
+
+            string script = HistoryExport.ToSqlScript(new[] { entry }, Generated, "f\r\nDROP TABLE d");
+
+            foreach (string line in script.Split('\n'))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed == "GO" || trimmed.StartsWith("--")) continue;
+                Assert.Equal("SELECT 1", trimmed);
+            }
+        }
+
         private static int CountOccurrences(string haystack, string needle)
         {
             int count = 0, index = 0;

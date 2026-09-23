@@ -54,6 +54,14 @@ namespace SsmsDataAnalyzer.Core.History
                         builder.AppendLine();
                     }
 
+                    if (entry.GroupCount > 1)
+                    {
+                        // With "Group identical" on, one row stands for several executions. An
+                        // export that silently dropped that would misrepresent the history.
+                        builder.Append("-- Ran ").Append(entry.GroupCount.ToString(CultureInfo.InvariantCulture))
+                            .Append(" times; the time above is the most recent.").AppendLine();
+                    }
+
                     if (entry.TextTruncated)
                     {
                         builder.Append("-- NOTE: this query was too long to store in full and is truncated.").AppendLine();

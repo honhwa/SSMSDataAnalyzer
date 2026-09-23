@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.21.0**
+**`SsmsDataAnalyzer.vsix` — version 0.21.1**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.21.1** — Export finished off: **Export selected…** on the right-click menu exports just the rows you picked; the confirmation says how many entries it is about to write; a grouped row's block now states how many runs it stands for (it used to export one block and say nothing about the rest); and the file notes it when the list hit the 5,000-entry display cap.
 
 **0.21.0** — Query History: **Export…** saves the list exactly as you have it filtered to a `.sql` file, one block per query with the server, database and time as a comment above it. It warns first, because the exported file is **not** encrypted — unlike the history itself, it holds the queries in plain text, passwords included.
 

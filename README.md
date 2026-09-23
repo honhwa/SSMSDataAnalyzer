@@ -433,9 +433,12 @@ single row, showing the most recent one and how many times you ran it (×3). It 
 button you can reach in one click.
 
 **Export…** writes the list, exactly as you have it filtered, to a `.sql` file — one block per
-query with the server, database and time as a comment above it. It asks first: that file is
-**not** encrypted, so unlike the history itself it holds the queries in plain text, passwords
-included. Put it somewhere you would put a password.
+query with the server, database and time as a comment above it, separated by `GO`. To export just
+a few, select them and use **Export selected…** on the right-click menu. If **Group identical** is
+on, each block says how many runs it stands for, so the export never understates what you ran.
+
+It asks first: that file is **not** encrypted, so unlike the history itself it holds the queries
+in plain text, passwords included. Put it somewhere you would put a password.
 
 ### Your history is encrypted
 

@@ -90,6 +90,7 @@
                     <MenuItem Header="Insert at cursor" Click="InsertMenuItem_Click" />
                     <MenuItem Header="Copy" Click="CopyMenuItem_Click" />
                     <MenuItem Header="Copy with header" Click="CopyWithHeaderMenuItem_Click" />
+                    <MenuItem Header="Export selected..." Click="ExportSelectedMenuItem_Click" />
                     <Separator />
                     <MenuItem Header="Star/unstar" Click="StarMenuItem_Click" />
                     <MenuItem Header="Delete" Click="DeleteMenuItem_Click" />
