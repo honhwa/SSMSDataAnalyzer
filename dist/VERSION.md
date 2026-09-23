@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.25.0**
+**`SsmsDataAnalyzer.vsix` — version 0.26.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.26.0** — **In a Peek window, clicking a link icon now peeks one level deeper instead of opening a new query tab.** With **← Back** (0.24.0) you can walk down a chain of foreign keys and back out again without ever leaving the window — which is the point of a peek. The icon there is a magnifier rather than "open in new window", since that is now what it does. Right-click → **Go to source…** still opens a query tab when that is what you want, and pivot windows are unchanged.
 
 **0.25.0** — **Every feature now has a keyboard shortcut out of the box.** They share one chord: hold **Ctrl+Alt** and press **Q**, then a letter — **H** history, **F** find, **G** go to source, **P** peek, **V** pivot, **A** aggregate, **D** analyze data, **I**/**N** paste as IN, **S** script object. Press Ctrl+Alt+Q and SSMS lists them. One chord is claimed instead of ten separate keys, so there is one chance of clashing with something you use rather than ten. **Nothing you have configured is overwritten:** the defaults are applied once, only to commands with no shortcut at all, and never onto a key already used by something else — so an upgrade cannot reset your own bindings, and a default you delete stays deleted.
 

@@ -44,6 +44,21 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
         /// <summary>Raised by the peek window's "Back" button. Pivot windows never show it.</summary>
         internal event EventHandler BackRequested;
 
+        /// <summary>
+        /// Peek windows only: a link icon follows the foreign key IN this window, one level
+        /// deeper, instead of opening a new query tab.
+        ///
+        /// Field report: opening a query tab from a peek was the wrong move once Back existed —
+        /// the point of a peek is to look without leaving what you were doing, and now that the
+        /// window can retrace its steps, going deeper in place is what the icon should do.
+        /// "Go to source…" on the right-click menu still opens a query tab for when that is
+        /// actually what you want.
+        ///
+        /// Must be set before the first Bind: it decides the icon and tooltip baked into each
+        /// generated column.
+        /// </summary>
+        internal bool FollowLinksInPlace { get; set; }
+
         /// <summary>Shows the Back button (peek windows only) and sets whether it can be used.
         /// Never called by pivot windows, so their toolbar is unchanged.</summary>
         internal void SetBackAvailable(bool canGoBack)
@@ -165,7 +180,11 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             // "OpenInNewWindow" in Segoe Fluent Icons / Segoe MDL2 Assets, which is what a click
             // does. v0.12.0 used a right arrow, which at the cell edge read as pointing at the
             // next column's value (field screenshot, v0.12.1).
-            glyphFactory.SetValue(TextBlock.TextProperty, "\uE8A7");
+            // "OpenInNewWindow" when a click opens a query tab; a magnifier when it peeks in
+            // place, since promising a new window and then not opening one is worse than no
+            // icon at all. Deliberately not an arrow either way: v0.12.0 used one and at the
+            // cell edge it read as pointing at the NEXT column's value (field screenshot).
+            glyphFactory.SetValue(TextBlock.TextProperty, FollowLinksInPlace ? "\uE721" : "\uE8A7");
             glyphFactory.SetValue(TextBlock.FontFamilyProperty, FkIconFontFamily);
             glyphFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
             glyphFactory.SetValue(TextBlock.ForegroundProperty, (System.Windows.Media.Brush)FindResource("FkIconBrush"));
@@ -187,7 +206,12 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             iconFactory.SetBinding(UIElement.VisibilityProperty,
                 new Binding(canGoPath) { Mode = BindingMode.OneWay, Converter = FkVisibilityConverter });
 
-            var tooltipBinding = new MultiBinding { Mode = BindingMode.OneWay, Converter = FkGoTooltipConverter };
+            var tooltipBinding = new MultiBinding
+            {
+                Mode = BindingMode.OneWay,
+                Converter = FkGoTooltipConverter,
+                ConverterParameter = FollowLinksInPlace ? "peek" : null
+            };
             tooltipBinding.Bindings.Add(new Binding("TargetText") { Mode = BindingMode.OneWay });
             tooltipBinding.Bindings.Add(new Binding(valuePath) { Mode = BindingMode.OneWay });
             iconFactory.SetBinding(FrameworkElement.ToolTipProperty, tooltipBinding);
@@ -224,7 +248,12 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
         private void OnFkIconClick(object sender, RoutedEventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (sender is FrameworkElement element && element.DataContext is PivotRowItem row && element.Tag is int rowIndex)
+            if (!(sender is FrameworkElement element) || !(element.DataContext is PivotRowItem row) || !(element.Tag is int rowIndex))
+                return;
+
+            if (FollowLinksInPlace)
+                _viewModel.PeekSource(row, rowIndex);
+            else
                 _viewModel.GoToSource(row, rowIndex);
         }
 

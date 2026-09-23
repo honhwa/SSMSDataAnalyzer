@@ -63,6 +63,10 @@ namespace SsmsDataAnalyzer.Vsix.Peek
             _view.PreviewKeyDown += OnViewPreviewKeyDown;
             _view.BackRequested += (s, e) => GoBack();
 
+            // A link icon in a peek goes one level deeper in THIS window rather than opening a
+            // query tab; Back walks the chain out again.
+            _view.FollowLinksInPlace = true;
+
             // Same pane-local Copy/SelectAll shape as PivotToolWindow (see its doc comment for
             // the decompilation trail): Ctrl+C/Ctrl+A are global VS commands, so registering
             // these standard IDs on this pane's OWN command service is what scopes them to

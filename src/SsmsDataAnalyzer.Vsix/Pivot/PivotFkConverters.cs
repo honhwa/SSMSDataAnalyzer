@@ -27,7 +27,13 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             var targetText = values[0] as string;
             var cellValue = values[1] as string;
             if (string.IsNullOrEmpty(targetText)) return null;
-            return "Go to " + targetText + " = " + cellValue;
+
+            // "peek" = the peek window, where a click follows the link IN PLACE rather than
+            // opening a query tab, so the wording has to promise something different.
+            bool inPlace = string.Equals(parameter as string, "peek", StringComparison.Ordinal);
+            return inPlace
+                ? "Peek " + targetText + " = " + cellValue + " here (Back returns)"
+                : "Go to " + targetText + " = " + cellValue;
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>

@@ -174,9 +174,11 @@ this value** instead. It shows the referenced record in a small floating window 
 no new query tab, nothing to clean up. Close it with **Esc** or its own **X** the moment you've
 seen what you needed. In a pivot window, the equivalent is **Peek source…** on a linked cell's
 right-click menu. Either way, if the peeked record itself has a linked column, the 🔗 icon
-inside the peek window works too, so you can follow a chain of foreign keys without ever
-opening a query tab — and **← Back** (or **Alt+Left**, or **Backspace**) walks that chain back
-one record at a time, so following a link is never a one-way trip. Go to source and Peek source are just two ways to look at the same result
+inside the peek window works too: clicking it follows the link **in the same window**, one level
+deeper, and **← Back** (or **Alt+Left**, or **Backspace**) walks back out again. So you can
+explore a chain of foreign keys without opening a single query tab, and without losing your way.
+The icon is a magnifier there rather than the "open in new window" one, because that is what it
+does. If you do want a query tab, right-click the cell → **Go to source…**. Go to source and Peek source are just two ways to look at the same result
 — picking one never changes what the other does.
 
 **It never guesses.** The option is only offered when the link is certain. It is not offered for:
@@ -245,7 +247,7 @@ selected.
 | **Hide all-NULL columns** | Hides columns that are empty in every row |
 | **Filter** | Narrows columns by name |
 | **Header** | Label each row by a column's value (e.g. `ID = 4522`) instead of `Row 7` |
-| **🔗 and ⧉** | Foreign-key column; click ⧉ in a cell to open the linked record ([Feature 3](#feature-3--jump-to-a-linked-record-go-to-source)). Hover it to see where it goes. Right-click a cell → **Go to source…** does the same, or **Peek source…** to see it in a small closable window without leaving the pivot. |
+| **🔗 and ⧉** | Foreign-key column; in a pivot, click ⧉ in a cell to open the linked record ([Feature 3](#feature-3--jump-to-a-linked-record-go-to-source)). Hover it to see where it goes. Right-click a cell → **Go to source…** does the same, or **Peek source…** to see it in a small closable window without leaving the pivot. |
 | **Ctrl+C** / **Ctrl+A** | Copy selected cells (pastes into Excel) / select all |
 | **Right-click → Copy as Markdown table** | Copies what's currently shown, for Jira or Confluence |
 
