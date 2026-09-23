@@ -4,6 +4,17 @@ Status: **complete.** Phase 1 shipped and confirmed in SSMS (v0.19.4), Phase 2 s
 confirmed (v0.20.0), and the export followed in v0.21.0. The interface is in §8; open decisions
 are in §9.
 
+**Query shortcuts are out of scope (user, 2026-09-23).** Queries run from SSMS's query shortcuts
+(Ctrl+3 = `SELECT TOP(100) * FROM`, Alt+F1 = `sp_help`, …) are not recorded. They fire a private
+command under GUID `{52692960-56BC-4989-B5D3-94C47A513E8D}` (cmdids 104–115), not `Query.Execute`,
+so our DTE hook never sees them, and SSMS composes the executed text itself. The fragments are
+readable (`%LOCALAPPDATA%\Microsoft\SSMS.0_*\settings.json`, key
+`environment.keyboard.queryShortcuts.shortcuts`) but the cmdid→shortcut-key mapping is not
+established, so we could not tell which shortcut ran. Recording a guess would put a query in the
+history that the user never ran, which is worse than recording nothing. Evidence:
+[docs/query-shortcuts-api.md](query-shortcuts-api.md). Go to source and Peek DO work on those
+grids (v0.23.0) — they verify against the grid's own headers rather than trusting the text.
+
 **Importing Redgate’s `SqlHistory.db` was dropped (user, 2026-09-23)** and is not planned. It
 would have needed a hand-written read-only SQLite parser — loading a SQLite provider in-process
 risks a DLL conflict with the copies SSMS already hosts (§3) — and starting the history fresh

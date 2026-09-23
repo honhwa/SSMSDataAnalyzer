@@ -392,6 +392,7 @@ record. This does.
 [Keyboard shortcuts](#keyboard-shortcuts)).
 
 Every query you **execute** is recorded: the text that ran, the server and database, and when.
+(One exception, in "Good to know" below: queries run from a query shortcut such as Ctrl+3.)
 The window lists them newest first, with a preview of the full text below the list.
 
 ### Finding one
@@ -469,6 +470,12 @@ If you'd rather not record something in the first place:
 ### Good to know
 
 - It records **executions**, not keystrokes — one entry each time you press Execute.
+- **Queries run from a query shortcut (Ctrl+3, Alt+F1, …) are not recorded.** SSMS runs those
+  through a different internal command that an extension cannot observe, and it composes the
+  text itself, so there is nothing for us to record. Deliberate: an entry holding only the table
+  name you had selected would be misleading, and guessing which shortcut you pressed could put a
+  query in your history that you never ran. (**Go to source** and **Peek** do work on those
+  grids — see [Feature 3](#feature-3--jump-to-a-linked-record-go-to-source).)
 - Recording happens in the background; it never slows down running a query.
 - **Duration** and **success/error** are filled in when SSMS tells us a query finished. On builds
   where that signal isn't available those two columns stay empty — everything else still works.
