@@ -129,6 +129,20 @@ namespace SsmsDataAnalyzer.Vsix.ResultsGrid
                     ExecutedTextByDocument.Remove(key);
                 else
                     ExecutedTextByDocument[key] = text;
+
+                // docs/query-history-plan.md §4 Phase 1 item 1: record this execution to Query
+                // History. Wrapped in its own try/catch (QueryHistoryCapture.OnBeforeExecute
+                // already guards itself too, but this is the "never interfere with Execute"
+                // rule applied twice, deliberately) so a failure here can never affect the Go to
+                // source capture above, or the user's Execute.
+                try
+                {
+                    History.QueryHistoryCapture.OnBeforeExecute(document, text);
+                }
+                catch (Exception historyEx)
+                {
+                    OeDiagnostics.Error("Executed-query tracking: Query History capture failed", historyEx);
+                }
             }
             catch (Exception ex)
             {

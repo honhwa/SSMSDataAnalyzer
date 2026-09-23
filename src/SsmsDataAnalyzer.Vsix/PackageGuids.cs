@@ -54,6 +54,11 @@ namespace SsmsDataAnalyzer.Vsix
         /// [$RootKey$\Editors\{B5A506EB-...}]). Its GUID is the key-binding scope that keeps our F12
         /// binding to SQL query windows only (VSCommandTable.vsct KeyBindings).</summary>
         public const string SqlQueryEditorFactoryGuidString = "b5a506eb-11be-4782-9a18-21265c2ca0b4";
+
+        /// <summary>docs/query-history-plan.md §8.7 (lead-assigned, do not change) --
+        /// QueryHistoryToolWindow's persistence GUID.</summary>
+        public const string QueryHistoryToolWindowPersistenceGuidString = "5f3a1c72-8d46-4b09-a2e7-6c81d4f9b3e5";
+        public static readonly Guid QueryHistoryToolWindowPersistenceGuid = new Guid(QueryHistoryToolWindowPersistenceGuidString);
     }
 
     /// <summary>Numeric command/menu/group IDs used inside VSCommandTable.vsct.</summary>
@@ -103,5 +108,14 @@ namespace SsmsDataAnalyzer.Vsix
         /// <summary>"Script object as ALTER" (F12 in SQL query windows) — same query-editor
         /// context-menu group as the paste commands, plus a Tools-menu CommandPlacement.</summary>
         public const int ScriptObjectAsAlterCommandId = 0x0302;
+
+        /// <summary>docs/query-history-plan.md §8.7 (lead-assigned, do not change) --
+        /// "Query History…" on the Tools menu, CanonicalName "SsmsDataAnalyzer.QueryHistory".</summary>
+        public const int QueryHistoryCommandId = 0x0400;
+
+        /// <summary>docs/query-history-plan.md §8.7 -- reserved for Phase 2's SSMS Data Analyzer
+        /// toolbar button; not wired into VSCommandTable.vsct in Phase 1.</summary>
+        public const int QueryHistoryToolbar = 0x1060;
+        public const int QueryHistoryToolbarGroup = 0x1061;
     }
 }

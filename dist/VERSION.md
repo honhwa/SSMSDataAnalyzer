@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.18.0**
+**`SsmsDataAnalyzer.vsix` — version 0.19.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -28,9 +28,14 @@ why.
 | Jump to a linked record | Right-click a cell or column → **Go to source…** |
 | Paste a list as an IN clause | In a query window, right-click → **Paste as SQL IN (...)** |
 | Compare rows side by side | Select rows in the results grid → right-click → **Pivot selected rows…** |
+| See what you ran earlier | **Tools → Query History…** |
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.19.0** — New: **Query History** (Tools → Query History…). Every query you execute is recorded locally — when, which server and database, and the text that ran — so you can find that query you ran an hour ago. Search it (`sql:`, `server:`, `db:`, `starred:true`, `error:true`, or just type words), filter by date, preview the text, star what you want to keep, and reopen an entry in a new query window (it never runs by itself). **Your history is encrypted on disk** with a key tied to your Windows account, so a copied file is useless on another PC or under another account; queries are stored exactly as you ran them, passwords included, and **Clear all history** destroys the key first so everything old becomes unreadable at once. Off-switch, excluded-servers list and a 30-day retention are in Tools → Options → SSMS Data Analyzer. Assign a shortcut under Environment → Keyboard (`SsmsDataAnalyzer.QueryHistory`).
+
+**0.19.0 fixes** — **Script object as ALTER is no longer slow, and the script no longer walks off to the right.** The script was being typed into the new query window line by line, so SSMS's editor re-indented every line as it arrived. It is now written in one go, exactly as SQL Server produced it. (This also speeds up the query window that **Go to source** opens.) **Ctrl+click now responds immediately**: the popup opens at once showing "Scripting …" with a progress bar while the server is asked, instead of nothing happening for a few seconds.
 
 **0.18.0** — **Go to source, Peek and pivot links now work on queries that use a #temp table** (or anything else SQL Server can't describe from outside your session). The extension reads your query's own `alias.Column` list and FROM clause to find which real table each column comes from; temp-table columns, expressions and `SELECT *` still get no link. The status bar says when an answer came from the query text.
 

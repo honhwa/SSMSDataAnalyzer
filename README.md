@@ -30,6 +30,7 @@ SQL `IN (...)` clause, and scripting the object under your cursor with **F12** o
 | **Aggregate a selection** — COUNT, DISTINCT, SUM, AVERAGE, MIN, MAX | Select cells in the results grid → right-click → **Aggregate selection…** |
 | **Paste a list as `IN (...)`** | In a query window, right-click → **Paste as SQL IN (...)** |
 | **Script an object** — ALTER into a new window, or peek at its CREATE | In a query window, cursor on a table/view/procedure name → **F12**, or **Ctrl+click** the name |
+| **See what you ran earlier** — searchable history of every query you execute | **Tools → Query History…** |
 | **Settings** | **Tools → Options… → SSMS Data Analyzer** |
 | **Your own keyboard shortcuts** | **Tools → Options… → Environment → Keyboard** |
 
@@ -381,6 +382,81 @@ your query:
 
 ---
 
+## Feature 8 — Query History
+
+*"What was that query I ran an hour ago?"* — the tab is closed, the text is gone. SSMS keeps no
+record. This does.
+
+**Where:** **Tools → Query History…** (or give it your own shortcut — see
+[Keyboard shortcuts](#keyboard-shortcuts)).
+
+Every query you **execute** is recorded: the text that ran, the server and database, and when.
+The window lists them newest first, with a preview of the full text below the list.
+
+### Finding one
+
+Type in the search box and the list narrows as you type. Plain words match inside the query text,
+and you can be specific:
+
+| Type this | To find |
+|---|---|
+| `Accounting` | every query mentioning Accounting |
+| `"create view"` | that exact phrase |
+| `server:ISUPT` | queries run on servers whose name contains ISUPT |
+| `db:Finances` | queries run against that database (`database:` works too) |
+| `starred:true` | only the ones you starred |
+| `error:true` | only the ones that failed |
+
+Terms combine, so `db:Finances create view` finds both. There's also a date filter — Today, Last 7
+days, Last 30 days, All.
+
+### Using one
+
+| Action | What it does |
+|---|---|
+| **Open in new query window** (or double-click) | Opens the query on the same server and database. **It is never run for you.** |
+| **Insert at cursor** | Drops the text into the query window you're already in |
+| **Copy** | The query text to the clipboard (Ctrl+C works too) |
+| **☆ Star** | Keeps an entry forever — starred entries are never removed by the retention period |
+| **Delete** / **Clear all history** | Removes one entry, or everything |
+
+### Your history is encrypted
+
+DBAs type passwords into queries — `CREATE LOGIN … WITH PASSWORD = '…'` and the like. A plain
+history file would hand all of them to anyone who copied your profile folder.
+
+So the file isn't plain. **Every entry is encrypted before it reaches the disk**, with a key tied
+to your Windows account (via Windows' own DPAPI), kept in
+`%LOCALAPPDATA%\SsmsDataAnalyzer\QueryHistory\`. Copy that folder to another PC, or open it
+under another Windows account, and it is unreadable — even to a local administrator. Server and
+database names are encrypted too, not just the query text.
+
+Queries are stored **exactly as you ran them**, passwords included. Nothing is rewritten or
+silently skipped, so what you see in the history is genuinely what you ran.
+
+**What this does not protect against:** someone using your PC while you are logged in, or malware
+running as you. In both cases your open query windows are just as exposed. Encryption protects the
+*file*, not a session someone is already sitting in front of.
+
+If you'd rather not record something in the first place:
+
+- **Excluded servers** — list production servers in Options and nothing from them is ever recorded.
+- **Enable query history** — turn it off entirely; existing history is left alone.
+- **Clear all history** — destroys the key first, so every existing file becomes unreadable
+  instantly, and then deletes them.
+
+### Good to know
+
+- It records **executions**, not keystrokes — one entry each time you press Execute.
+- Recording happens in the background; it never slows down running a query.
+- **Duration** and **success/error** are filled in when SSMS tells us a query finished. On builds
+  where that signal isn't available those two columns stay empty — everything else still works.
+- Entries older than the retention period (**30 days** by default) are removed when SSMS starts.
+  Starred ones are kept forever.
+- Very long scripts are stored up to 1 MB, then truncated with a marker.
+
+---
+
 ## Keyboard shortcuts
 
 The extension ships with **one** default shortcut: **F12 = Script object as ALTER**, and only
@@ -420,6 +496,9 @@ restart needed.
 | **Query timeout (seconds)** | How long Analyze Data waits before giving up on a slow table — raise it if a big table times out | 120 |
 | **Large table threshold (rows)** | Above this size, Analyze Data warns you before starting a long analysis | 10,000,000 |
 | **DateCreated candidate columns** | Fallback column names used for **Last Fill** when a table has no `DateCreated` | `CreatedDate, CreatedOn, …` |
+| **Enable query history** | Whether executed queries are recorded at all | On |
+| **Excluded servers** | Comma-separated server names that are never recorded — e.g. production | (empty) |
+| **Retention (days)** | History older than this is removed at SSMS startup; starred entries are kept | 30 |
 | **Enable right-click Analyze Data** | Turn off only if a future SSMS update breaks the Object Explorer menu | On |
 | **Distinct batch size**, **Max grant percent**, **MAXDOP** | Advanced — how Analyze Data spreads its work and caps its server memory use | 8, 25, 0 |
 
@@ -440,6 +519,8 @@ It only ever **reads**. It never writes, updates or deletes anything.
   your screen or clipboard — they don't query the database at all.
 - Your password is never stored or written anywhere, and cell values are never written to SSMS's
   log files.
+- **Query History** records only what you executed, locally and encrypted; it never runs anything
+  by itself and never sends anything anywhere.
 
 ---
 

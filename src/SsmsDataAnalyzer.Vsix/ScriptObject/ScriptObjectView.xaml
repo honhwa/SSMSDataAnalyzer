@@ -27,6 +27,8 @@
                     ToolTip="Copy the whole script to the clipboard" Click="CopyButton_Click" />
             <Button x:Name="OpenButton" DockPanel.Dock="Left" Content="Open in new query window" Padding="10,2" Margin="0,0,10,0"
                     ToolTip="Open this script in a new query window on the same connection (not executed)" Click="OpenButton_Click" />
+            <ProgressBar x:Name="Spinner" DockPanel.Dock="Left" Width="90" Height="4" Margin="0,0,8,0"
+                         IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Center" />
             <TextBlock x:Name="InfoText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Foreground="{StaticResource ContextTextBrush}" Text="Esc to close" />
         </DockPanel>

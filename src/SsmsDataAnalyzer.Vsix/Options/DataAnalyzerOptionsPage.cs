@@ -28,6 +28,24 @@ namespace SsmsDataAnalyzer.Vsix.Options
         [DefaultValue(PivotBuilder.DefaultRowLimit)]
         public int PivotRowLimit { get; set; } = PivotBuilder.DefaultRowLimit;
 
+        [Category("Query history")]
+        [DisplayName("Enable query history")]
+        [Description("Records every query you execute (docs/query-history-plan.md) locally, encrypted at rest. Turn off to record nothing -- existing history is untouched.")]
+        [DefaultValue(true)]
+        public bool EnableQueryHistory { get; set; } = true;
+
+        [Category("Query history")]
+        [DisplayName("Excluded servers")]
+        [Description("Comma-separated server names that are never recorded to query history, for example production servers. Exact match, case-insensitive.")]
+        [DefaultValue("")]
+        public string QueryHistoryExcludedServers { get; set; } = string.Empty;
+
+        [Category("Query history")]
+        [DisplayName("Retention (days)")]
+        [Description("Query history entries older than this are removed at SSMS startup. Starred entries are never trimmed.")]
+        [DefaultValue(30)]
+        public int QueryHistoryRetentionDays { get; set; } = 30;
+
         [Category("Object Explorer integration")]
         [DisplayName("Enable right-click Analyze Data")]
         [Description("Adds 'Analyze Data...' to the right-click menu of table nodes in Object Explorer, wired to that node's own connection (CONTRACT.md Amendment 13). Uses unsupported, undocumented SSMS API (see docs/oe-api.md) behind a try/catch that falls back to the Tools menu entry point if unavailable. Turn off if a future SSMS update breaks it.")]

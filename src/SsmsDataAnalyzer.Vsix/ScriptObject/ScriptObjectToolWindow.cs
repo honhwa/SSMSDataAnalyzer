@@ -54,6 +54,27 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
             }
         }
 
+        /// <summary>Opens straight into the waiting state, so a Ctrl+click gives instant
+        /// feedback while the object is resolved and scripted on the server.</summary>
+        internal void BindPending(string objectName)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _script = null;
+            _database = null;
+            _connectionInfo = null;
+            Caption = "Script: " + objectName;
+            _view.BindPending(objectName);
+        }
+
+        /// <summary>The scripting request failed; leave the popup open saying why.</summary>
+        internal void BindFailed(string objectName, string message)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _script = null;
+            Caption = "Script: " + objectName;
+            _view.BindFailed(message);
+        }
+
         internal void Bind(string script, ResolvedSqlObject obj, UIConnectionInfo connectionInfo)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

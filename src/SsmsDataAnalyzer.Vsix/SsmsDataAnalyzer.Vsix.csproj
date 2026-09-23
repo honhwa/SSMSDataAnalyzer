@@ -65,6 +65,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      docs/query-history-plan.md §8.3: DpapiKeyProtector wraps System.Security.Cryptography.
+      ProtectedData — part of .NET Framework 4.7.2 itself (System.Security.dll, a GAC/reference
+      assembly, not a NuGet package), so nothing extra is shipped in the .vsix for this. Not
+      part of this SDK-style project's implicit framework reference set, so listed explicitly
+      like every other framework assembly this project needs beyond the default.
+    -->
+    <Reference Include="System.Security" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Visual Studio SDK (shell, package infrastructure, threading, tool windows). -->
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.32112.339" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="$(VsSDKBuildToolsVersion)">
@@ -235,6 +246,13 @@
     </Page>
     <Compile Update="Pivot\PivotView.xaml.cs">
       <DependentUpon>PivotView.xaml</DependentUpon>
+    </Compile>
+    <Page Update="History\QueryHistoryView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Update="History\QueryHistoryView.xaml.cs">
+      <DependentUpon>QueryHistoryView.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
 

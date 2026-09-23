@@ -44,5 +44,23 @@ namespace SsmsDataAnalyzer.Vsix.Options
             if (value > PivotBuilder.MaxRowLimit) return PivotBuilder.MaxRowLimit;
             return value;
         }
+
+        /// <summary>docs/query-history-plan.md §3/§8.7 -- same read-fresh-every-time shape as
+        /// the rest of this class, defaulting to the same values as DataAnalyzerOptionsPage's
+        /// own defaults when nothing is wired (e.g. a harness).</summary>
+        public static Func<bool> EnableQueryHistoryProvider { get; set; }
+
+        public static bool GetEnableQueryHistory() =>
+            EnableQueryHistoryProvider != null ? EnableQueryHistoryProvider() : true;
+
+        public static Func<string> QueryHistoryExcludedServersProvider { get; set; }
+
+        public static string GetQueryHistoryExcludedServers() =>
+            QueryHistoryExcludedServersProvider != null ? QueryHistoryExcludedServersProvider() : string.Empty;
+
+        public static Func<int> QueryHistoryRetentionDaysProvider { get; set; }
+
+        public static int GetQueryHistoryRetentionDays() =>
+            QueryHistoryRetentionDaysProvider != null ? QueryHistoryRetentionDaysProvider() : 30;
     }
 }

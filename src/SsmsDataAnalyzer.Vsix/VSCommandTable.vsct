@@ -65,6 +65,20 @@
       </Button>
 
       <!--
+        docs/query-history-plan.md §4 Phase 1 item 2 / §8.7: "Query History…" on the Tools
+        menu, same group as cmdidAnalyzeData. CanonicalName lets a keyboard shortcut be
+        assigned (none by default, per every command in this extension).
+      -->
+      <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidQueryHistory" priority="0x0130" type="Button">
+        <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
+        <Strings>
+          <ButtonText>Query History...</ButtonText>
+          <CanonicalName>SsmsDataAnalyzer.QueryHistory</CanonicalName>
+          <LocCanonicalName>SsmsDataAnalyzer.QueryHistory</LocCanonicalName>
+        </Strings>
+      </Button>
+
+      <!--
         Starts invisible (DefaultInvisible) — ResultsGridSourceCommand.OnBeforeQueryStatus is
         the ONLY thing that ever makes it visible, and only when the right-click actually
         landed on a results-grid data cell (CONTRACT.md Amendment 16's precondition gate).
@@ -270,6 +284,8 @@
       <IDSymbol name="cmdidPasteAsSqlIn" value="0x0300" />
       <IDSymbol name="cmdidPasteAsNumericSqlIn" value="0x0301" />
       <IDSymbol name="cmdidScriptObjectAsAlter" value="0x0302" />
+      <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->
+      <IDSymbol name="cmdidQueryHistory" value="0x0400" />
     </GuidSymbol>
 
     <!--

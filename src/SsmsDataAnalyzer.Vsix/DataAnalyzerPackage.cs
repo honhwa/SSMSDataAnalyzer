@@ -7,7 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.SqlServer.Management.UI.VSIntegration.ObjectExplorer;
 using System.Windows;
 using System.Windows.Media;
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.TextManager.Interop;
 using SsmsDataAnalyzer.Core.Model;
 using SsmsDataAnalyzer.Vsix.GoToSource;
 using SsmsDataAnalyzer.Vsix.ObjectExplorer;
@@ -84,6 +87,10 @@ namespace SsmsDataAnalyzer.Vsix
     // "Script object" Ctrl+click popup — same "glance at it, close it" floating/transient shape as
     // PeekToolWindow, sized for a script rather than a record.
     [ProvideToolWindow(typeof(ScriptObject.ScriptObjectToolWindow), Style = VsDockStyle.Float, Width = 700, Height = 500, Transient = true)]
+    // docs/query-history-plan.md §4 Phase 1 item 3: a normal dockable, PERSISTENT tool window
+    // (not Transient, not Float) -- a panel the user comes back to, same shape as
+    // ProfileToolWindow, so VS remembers its docked position across sessions.
+    [ProvideToolWindow(typeof(History.QueryHistoryToolWindow))]
     [ProvideOptionPage(typeof(DataAnalyzerOptionsPage), "SSMS Data Analyzer", "General", 0, 0, true)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.NoSolution, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
@@ -111,6 +118,7 @@ namespace SsmsDataAnalyzer.Vsix
             await ResultsGrid.ResultsGridFindCommand.InitializeAsync(this);
             await Pivot.PivotRowsCommand.InitializeAsync(this);
             await ResultsGrid.AggregateSelectionCommand.InitializeAsync(this);
+            await History.QueryHistoryCommand.InitializeAsync(this);
 
             // Query-editor "Paste as SQL IN (...)". Registered on the package's own command
             // service, like every other command here. Unlike the results-grid features this
@@ -179,6 +187,27 @@ namespace SsmsDataAnalyzer.Vsix
                 ThreadHelper.ThrowIfNotOnUIThread();
                 var page = (DataAnalyzerOptionsPage)GetDialogPage(typeof(DataAnalyzerOptionsPage));
                 return page.PivotRowLimit;
+            };
+            // docs/query-history-plan.md §3/§8.7 -- same fresh-read-per-call shape as the rest
+            // of this method, so a Tools > Options change (including the excluded-servers list)
+            // takes effect on the very next Execute without restarting SSMS.
+            Options.OptionsAccessor.EnableQueryHistoryProvider = () =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var page = (DataAnalyzerOptionsPage)GetDialogPage(typeof(DataAnalyzerOptionsPage));
+                return page.EnableQueryHistory;
+            };
+            Options.OptionsAccessor.QueryHistoryExcludedServersProvider = () =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var page = (DataAnalyzerOptionsPage)GetDialogPage(typeof(DataAnalyzerOptionsPage));
+                return page.QueryHistoryExcludedServers;
+            };
+            Options.OptionsAccessor.QueryHistoryRetentionDaysProvider = () =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var page = (DataAnalyzerOptionsPage)GetDialogPage(typeof(DataAnalyzerOptionsPage));
+                return page.QueryHistoryRetentionDays;
             };
         }
 
@@ -639,6 +668,16 @@ namespace SsmsDataAnalyzer.Vsix
             error = null;
             try
             {
+                // v0.19.0 field report ("script object as ALTER is extremely slow, it looks like
+                // someone presses key by key, and the script looks weird"): the DTE path below
+                // writes THROUGH the editor, so SSMS's T-SQL editor runs its auto-indent over
+                // every line as it arrives. On a long CREATE TABLE script that is both slow and
+                // visibly wrong — each line inherits the previous line's indent and the script
+                // walks off to the right in a staircase. Replacing the text buffer directly is
+                // one atomic edit with no editor formatting at all, so it is instant and the
+                // script arrives exactly as SMO produced it.
+                if (TryReplaceDocumentTextViaBuffer(document, sql)) return true;
+
                 var selection = document.Selection as EnvDTE.TextSelection;
                 if (selection == null)
                 {
@@ -654,6 +693,58 @@ namespace SsmsDataAnalyzer.Vsix
             {
                 error = $"{ex.GetType().Name}: {ex.Message}";
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Replaces the whole document through its text buffer (<see cref="IVsTextLines"/>) in a
+        /// single edit. Returns false when the buffer can't be reached, so the caller can fall
+        /// back to the DTE selection path — see the comment in TryInsertSqlIntoDocument for why
+        /// this is preferred.
+        /// </summary>
+        private static bool TryReplaceDocumentTextViaBuffer(EnvDTE.Document document, string sql)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            IntPtr text = IntPtr.Zero;
+            try
+            {
+                string moniker = document?.FullName;
+                if (string.IsNullOrEmpty(moniker)) return false;
+
+                if (!VsShellUtilities.IsDocumentOpen(
+                        ServiceProvider.GlobalProvider, moniker, Guid.Empty,
+                        out _, out _, out IVsWindowFrame frame) || frame == null)
+                {
+                    return false;
+                }
+
+                if (ErrorHandler.Failed(frame.GetProperty((int)__VSFPROPID.VSFPROPID_DocData, out object docData)))
+                    return false;
+
+                var lines = docData as IVsTextLines;
+                if (lines == null && docData is IVsTextBufferProvider provider
+                    && ErrorHandler.Succeeded(provider.GetTextBuffer(out IVsTextLines fromProvider)))
+                {
+                    lines = fromProvider;
+                }
+                if (lines == null) return false;
+
+                if (ErrorHandler.Failed(lines.GetLineCount(out int lineCount)) || lineCount <= 0) return false;
+                if (ErrorHandler.Failed(lines.GetLengthOfLine(lineCount - 1, out int lastLineLength))) return false;
+
+                text = Marshal.StringToHGlobalUni(sql ?? string.Empty);
+                return ErrorHandler.Succeeded(lines.ReplaceLines(
+                    0, 0, lineCount - 1, lastLineLength, text, (sql ?? string.Empty).Length, null));
+            }
+            catch (Exception ex)
+            {
+                // Never the script text in the message — only the failure kind.
+                OeDiagnostics.Warn("Writing the script through the text buffer failed (" + ex.GetType().Name + "); falling back to the editor path.");
+                return false;
+            }
+            finally
+            {
+                if (text != IntPtr.Zero) Marshal.FreeHGlobal(text);
             }
         }
 
@@ -883,6 +974,11 @@ namespace SsmsDataAnalyzer.Vsix
             {
                 _oeBridge?.Dispose();
                 _oeBridge = null;
+
+                // Record any execution still waiting for its completion signal, so closing
+                // SSMS right after running a query doesn't drop it from the history.
+                try { History.QueryHistoryCapture.FlushPending(); }
+                catch { /* shutdown path: never throw out of Dispose */ }
             }
             base.Dispose(disposing);
         }

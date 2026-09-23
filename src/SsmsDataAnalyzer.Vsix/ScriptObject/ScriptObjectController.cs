@@ -207,6 +207,11 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
 
             _package.JoinableTaskFactory.RunAsync(async () =>
             {
+                // Ctrl+click: open the popup NOW, in its waiting state. Resolving the object and
+                // scripting it is a server round trip, and until v0.19.0 nothing at all appeared
+                // for those seconds, so the click looked like it had been ignored (field report).
+                ScriptObjectToolWindow pending = forAlter ? null : await ShowPendingPopupAsync(name.ToString());
+
                 ScriptOutcome outcome = await Task.Run(() => ScriptAsync(connectionString, database, name, forAlter)).ConfigureAwait(false);
                 await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -215,6 +220,7 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
                 if (!outcome.Success)
                 {
                     SetStatus(StatusPrefix + outcome.Message);
+                    pending?.BindFailed(name.ToString(), "Could not script " + name + " — see the status bar.   ·   Esc to close");
                     return;
                 }
 
@@ -231,7 +237,7 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
                 }
                 else
                 {
-                    await ShowPopupAsync(outcome, connectionInfo);
+                    await ShowPopupAsync(outcome, connectionInfo, pending);
                     SetStatus(StatusPrefix + "CREATE script for " + what + ".");
                 }
             }).FileAndForget("SsmsDataAnalyzer/ScriptObject/Start");
@@ -297,10 +303,30 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
             }
         }
 
-        private static async Task ShowPopupAsync(ScriptOutcome outcome, UIConnectionInfo connectionInfo)
+        /// <summary>Shows the popup immediately, before the script exists, so a Ctrl+click has
+        /// visible feedback while the server is queried. Returns null if it can't be shown, in
+        /// which case the flow simply behaves as it did before.</summary>
+        private static async Task<ScriptObjectToolWindow> ShowPendingPopupAsync(string objectName)
+        {
+            try
+            {
+                await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
+                var pane = await _package.ShowToolWindowAsync(
+                    typeof(ScriptObjectToolWindow), id: 0, create: true, cancellationToken: CancellationToken.None) as ScriptObjectToolWindow;
+                pane?.BindPending(objectName);
+                return pane;
+            }
+            catch (Exception ex)
+            {
+                OeDiagnostics.Warn("Script object: could not show the waiting popup (" + ex.GetType().Name + "); the script will still appear when it is ready.");
+                return null;
+            }
+        }
+
+        private static async Task ShowPopupAsync(ScriptOutcome outcome, UIConnectionInfo connectionInfo, ScriptObjectToolWindow pending = null)
         {
             await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
-            var pane = await _package.ShowToolWindowAsync(
+            var pane = pending ?? await _package.ShowToolWindowAsync(
                 typeof(ScriptObjectToolWindow), id: 0, create: true, cancellationToken: CancellationToken.None) as ScriptObjectToolWindow;
             if (pane == null)
             {
