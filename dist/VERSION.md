@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.19.0**
+**`SsmsDataAnalyzer.vsix` — version 0.19.1**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.19.1** — **Fixes Query History recording nothing at all in 0.19.0.** The history folder was never created before the encryption key was written to it, so setting up history failed on the first run and every execution went unrecorded, silently. Nothing was lost that had been saved — nothing had been saved. Also: an entry now appears within a few seconds of running the query instead of waiting up to 30 seconds for the optional duration signal, and **Clear all history** now creates a fresh key for the rest of the session (previously, queries run after a Clear would have been unreadable the next time SSMS started).
 
 **0.19.0** — New: **Query History** (Tools → Query History…). Every query you execute is recorded locally — when, which server and database, and the text that ran — so you can find that query you ran an hour ago. Search it (`sql:`, `server:`, `db:`, `starred:true`, `error:true`, or just type words), filter by date, preview the text, star what you want to keep, and reopen an entry in a new query window (it never runs by itself). **Your history is encrypted on disk** with a key tied to your Windows account, so a copied file is useless on another PC or under another account; queries are stored exactly as you ran them, passwords included, and **Clear all history** destroys the key first so everything old becomes unreadable at once. Off-switch, excluded-servers list and a 30-day retention are in Tools → Options → SSMS Data Analyzer. Assign a shortcut under Environment → Keyboard (`SsmsDataAnalyzer.QueryHistory`).
 

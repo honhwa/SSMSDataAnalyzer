@@ -121,12 +121,19 @@ namespace SsmsDataAnalyzer.Vsix.History
                     if (_initFailed) return;
                     _keyStore.Destroy();
                     _store.ClearAll();
-                    // The in-memory key/cipher this process holds still works for whatever gets
-                    // appended for the rest of this session -- only the ON-DISK key file is
-                    // gone. A fresh key.bin (and therefore a fresh cipher) only matters the next
-                    // time SSMS starts, which is exactly the crypto-shred guarantee: every file
-                    // written *before* this moment is unreadable, forever, starting now.
-                    ObjectExplorer.OeDiagnostics.Info("Query history: cleared (key destroyed, then files deleted).");
+
+                    // Crypto-shred done: every file written before this moment is unreadable
+                    // forever. But the session must not carry on encrypting with a key that no
+                    // longer exists on disk -- the next SSMS start would create a fresh key.bin
+                    // and everything recorded after this Clear would be undecryptable, i.e.
+                    // silently lost. So mint a new key now and rebuild the store around it.
+                    byte[] newKey = _keyStore.LoadOrCreate();
+                    var newStore = new HistoryStore(new HistoryFileSystem(), _rootDirectory, new HistoryCipher(newKey), () => DateTime.UtcNow);
+                    newStore.Changed += (s2, e2) => Changed?.Invoke(null, EventArgs.Empty);
+                    newStore.Load();
+                    _store = newStore;
+
+                    ObjectExplorer.OeDiagnostics.Info("Query history: cleared (key destroyed, then files deleted; a new key was created for this session).");
                 }
                 catch (Exception ex)
                 {
@@ -211,6 +218,12 @@ namespace SsmsDataAnalyzer.Vsix.History
                     "SsmsDataAnalyzer", "QueryHistory");
 
                 var fileSystem = new HistoryFileSystem();
+
+                // Create (and ACL) the folder before anything writes into it. HistoryKeyStore
+                // does this for itself too; doing it here as well means the very first run on a
+                // clean machine cannot fail on a missing directory.
+                fileSystem.EnsureDirectory(_rootDirectory);
+
                 var protector = new DpapiKeyProtector();
                 _keyStore = new HistoryKeyStore(fileSystem, protector, Path.Combine(_rootDirectory, "key.bin"));
 

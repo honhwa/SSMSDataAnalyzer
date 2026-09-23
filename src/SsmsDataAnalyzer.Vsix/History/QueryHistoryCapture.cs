@@ -39,10 +39,16 @@ namespace SsmsDataAnalyzer.Vsix.History
             new Dictionary<string, PendingCapture>(StringComparer.OrdinalIgnoreCase);
         private static readonly object PendingLock = new object();
 
-        // Long enough for the vast majority of interactive queries to finish; bounded so a
-        // long-running or abandoned query still gets recorded (without duration) rather than
-        // waiting indefinitely.
-        private static readonly TimeSpan FallbackDelay = TimeSpan.FromSeconds(30);
+        // How long an entry waits for the optional completion signal before being recorded
+        // without duration/outcome.
+        //
+        // Kept deliberately short: the entry does not exist in the history until this elapses,
+        // and "I ran a query and the history is empty" is a far worse outcome than a missing
+        // duration on a slow query. Queries that take longer than this are still recorded in
+        // full -- they simply show no duration. (A later change could record immediately and
+        // fill the duration in afterwards; that needs the edits sidecar to carry more than
+        // starred/deleted, so it is not a Phase 1 change.)
+        private static readonly TimeSpan FallbackDelay = TimeSpan.FromSeconds(5);
 
         public static void OnBeforeExecute(Document document, string executedText)
         {

@@ -35,6 +35,15 @@ namespace SsmsDataAnalyzer.Core.History
 
             byte[] key = HistoryCipher.NewKey();
             byte[] protectedKey = _protector.Protect(key);
+
+            // The key file is the FIRST thing written on a clean machine -- before HistoryStore
+            // has appended anything, so before anything else has created the folder. Without
+            // this the very first write throws DirectoryNotFoundException, initialization fails
+            // and history stays silently empty forever (v0.19.0 field report: "I tried a few
+            // executes and history is empty" -- the folder had never been created).
+            string directory = System.IO.Path.GetDirectoryName(_keyFilePath);
+            if (!string.IsNullOrEmpty(directory)) _fileSystem.EnsureDirectory(directory);
+
             _fileSystem.WriteAllBytes(_keyFilePath, protectedKey);
             return key;
         }

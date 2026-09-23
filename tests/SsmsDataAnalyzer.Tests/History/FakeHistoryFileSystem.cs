@@ -6,10 +6,14 @@ using SsmsDataAnalyzer.Core.History;
 namespace SsmsDataAnalyzer.Tests.History
 {
     /// <summary>
-    /// In-memory stand-in for <see cref="IHistoryFileSystem"/>. Paths are treated as opaque
-    /// keys (no real directory semantics), which is enough for <see cref="HistoryStore"/> and
-    /// <see cref="HistoryKeyStore"/> since they only ever combine a root directory with a file
-    /// name and never enumerate subdirectories.
+    /// In-memory stand-in for <see cref="IHistoryFileSystem"/>.
+    ///
+    /// It ENFORCES that a file's directory was created first, because the original version did
+    /// not: it treated paths as opaque keys, every test passed, and the feature was still dead
+    /// on a real disk -- HistoryKeyStore wrote key.bin into a folder nobody had created, which
+    /// throws DirectoryNotFoundException for real and silently disabled query history
+    /// (v0.19.0 field report). A fake that is laxer than the real thing hides exactly the bugs
+    /// it exists to catch, so writes here fail the same way Windows would.
     /// </summary>
     public sealed class FakeHistoryFileSystem : IHistoryFileSystem
     {
@@ -34,6 +38,7 @@ namespace SsmsDataAnalyzer.Tests.History
 
         public void AppendLines(string path, IEnumerable<string> lines)
         {
+            RequireDirectory(path);
             if (!_lines.TryGetValue(path, out List<string> existing))
             {
                 existing = new List<string>();
@@ -53,7 +58,21 @@ namespace SsmsDataAnalyzer.Tests.History
 
         public void WriteAllBytes(string path, byte[] bytes)
         {
+            RequireDirectory(path);
             _bytes[path] = bytes;
+        }
+
+        /// <summary>Throws the way Windows does when a file is written into a directory that
+        /// was never created.</summary>
+        private void RequireDirectory(string path)
+        {
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(directory)) return;
+            if (!_directories.Contains(directory))
+            {
+                throw new System.IO.DirectoryNotFoundException(
+                    "Could not find a part of the path '" + path + "' -- EnsureDirectory was never called for '" + directory + "'.");
+            }
         }
 
         public void DeleteFile(string path)
