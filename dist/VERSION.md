@@ -1,11 +1,11 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.26.0**
+**`SsmsDataAnalyzer.vsix` — version 0.27.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
 
-Requires **SSMS 22**. Every feature — Analyze Data, Find in Results, Go to source — works on
+Requires **SSMS 22.3 or newer** (see 0.27.0 below). Every feature — Analyze Data, Find in Results, Go to source — works on
 every SSMS 22 build. (v0.7.6 briefly needed a newer 22.x build for the results-grid features;
 v0.8.0 moved them onto a results-grid API confirmed present as far back as SSMS 21, so that
 requirement is gone. The graceful-degradation safety net from v0.7.6 — a hidden menu item and
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.27.0** — **Now requires SSMS 22.3 or newer.** A user on SSMS 22.0 reported an error when SSMS starts, so the installer no longer accepts builds below 22.3 — it refuses up front instead of installing something that misbehaves. Check yours under **Help → About**. Note this is "the oldest build we support", not "the oldest that works": 22.0 is known bad, 22.10 is known good, and the builds between are untested. **If it is already installed on an older build**, this does not remove it — uninstall it under **Extensions → Manage Extensions**.
 
 **0.26.0** — **In a Peek window, clicking a link icon now peeks one level deeper instead of opening a new query tab.** With **← Back** (0.24.0) you can walk down a chain of foreign keys and back out again without ever leaving the window — which is the point of a peek. The icon there is a magnifier rather than "open in new window", since that is now what it does. Right-click → **Go to source…** still opens a query tab when that is what you want, and pivot windows are unchanged.
 

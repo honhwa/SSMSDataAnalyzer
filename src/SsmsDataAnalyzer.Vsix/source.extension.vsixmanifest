@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="SsmsDataAnalyzer.6f2b6e2a-6c2a-4e3a-9c9a-2f6b0c8a1a4d" Version="0.26.0" Language="en-US" Publisher="SsmsDataAnalyzer" />
+    <Identity Id="SsmsDataAnalyzer.6f2b6e2a-6c2a-4e3a-9c9a-2f6b0c8a1a4d" Version="0.27.0" Language="en-US" Publisher="SsmsDataAnalyzer" />
     <DisplayName>SSMS Data Analyzer</DisplayName>
     <Description xml:space="preserve">Per-column data profiling for SQL Server tables: fill rate, exact distinct counts, last-fill date, min/max and flags, directly inside SQL Server Management Studio.</Description>
     <MoreInfo>https://github.com/</MoreInfo>
@@ -20,11 +20,21 @@
     <!--
       Pinned to SSMS 22 only, per CONTRACT.md and PLAN.md. Verified against
       Extensions\Application\extension.vsixmanifest (SSMS's own self-declared
-      InstallationTarget Id) inside the SSMS 22 IDE folder. Do not widen this range and
-      do not add a VS-generic InstallationTarget — this extension is SSMS-22-exclusive
-      by design (no compatibility shims, no older-shell branches).
+      InstallationTarget Id) inside the SSMS 22 IDE folder. Do not add a VS-generic
+      InstallationTarget — this extension is SSMS-22-exclusive by design (no compatibility
+      shims, no older-shell branches).
+
+      LOWER BOUND RAISED TO 22.3 (v0.27.0, field report 2026-09-24): a user on SSMS 22.0 got
+      an error when SSMS started. The cause was not diagnosed — the decision was to stop the
+      install rather than debug a build nobody here has. So treat 22.3 as "the oldest build we
+      are willing to support", NOT as "the oldest build that works": 22.0 is known bad, 22.10 is
+      known good, and 22.1 through 22.9 are simply untested. If the startup error is ever
+      diagnosed and fixed, this can go back down.
+
+      Do not widen it without that diagnosis, and note the comparison trap if you ever change
+      it: these are per-component versions, not decimals, so 22.10 is ABOVE 22.3, not below it.
     -->
-    <InstallationTarget Id="Microsoft.VisualStudio.Ssms" Version="[22.0,)">
+    <InstallationTarget Id="Microsoft.VisualStudio.Ssms" Version="[22.3,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
