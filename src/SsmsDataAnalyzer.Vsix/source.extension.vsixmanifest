@@ -26,10 +26,14 @@
 
       LOWER BOUND RAISED TO 22.3 (v0.27.0, field report 2026-09-24): a user on SSMS 22.0 got
       an error when SSMS started. The cause was not diagnosed — the decision was to stop the
-      install rather than debug a build nobody here has. So treat 22.3 as "the oldest build we
-      are willing to support", NOT as "the oldest build that works": 22.0 is known bad, 22.10 is
-      known good, and 22.1 through 22.9 are simply untested. If the startup error is ever
-      diagnosed and fixed, this can go back down.
+      install rather than debug a build nobody here has.
+
+      22.3 is the oldest build actually VERIFIED: it is what the maintainer's Hyper-V VM runs,
+      and Query History, peek navigation and the results-grid features were all confirmed
+      working there. 22.10 (this dev machine) is likewise good. So 22.0 is known bad, 22.3 and
+      22.10 are known good, and only 22.1–22.2 are untested — the floor sits on evidence rather
+      than on a guess. If the 22.0 startup error is ever diagnosed and fixed, this can go back
+      down.
 
       Do not widen it without that diagnosis, and note the comparison trap if you ever change
       it: these are per-component versions, not decimals, so 22.10 is ABOVE 22.3, not below it.

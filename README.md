@@ -52,7 +52,8 @@ That's it — you'll find **Analyze Data…** when you right-click a table.
 
 Requires **SSMS 22.3 or newer**. It will not install on an older SSMS 22 build, on SSMS 21 or
 older, or on Visual Studio — the installer refuses rather than installing something that misbehaves.
-(SSMS 22.0 was reported to show an error when SSMS starts; **Help → About** shows your version.)
+(SSMS 22.0 was reported to show an error when SSMS starts. 22.3 is the oldest build every
+feature has been confirmed working on. **Help → About** shows your version.)
 
 <details>
 <summary>If double-clicking doesn't work</summary>
