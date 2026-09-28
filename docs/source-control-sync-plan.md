@@ -264,6 +264,7 @@ public sealed class DdlStatement
 {
     public DdlAction Action { get; }
     public ModuleRef Target { get; }
+    public string    Database { get; }   // lead amendment, see below; null = not named
 }
 
 public static class DdlDetector
@@ -277,6 +278,13 @@ TRIGGER | TABLE`, including `DROP … IF EXISTS` and a comma-separated `DROP` li
 per target). Skipped, not reported: `#temp` / `##global` tables, `@table` variables, anything
 inside a string or a comment (the lexer already says so — so `EXEC('ALTER PROCEDURE …')` is
 knowingly missed), and `DROP`/`CREATE` of any other object type.
+
+**Lead amendment (2026-09-28, on review of C1):** `DdlStatement.Database` carries the database a
+three-part name states (`DROP TABLE OtherDb.dbo.Orders` → `OtherDb`). C1 had kept only the last
+two parts, so such a change was attributed to whichever database the query window was using — a
+false `DroppedButInRepo` against the wrong project. The Vsix uses `Database` over the session
+database whenever it is set. Four-part (linked-server) names are skipped: no DDL can target one
+and we could not attribute it. Covered by three tests; the key one fails with the fix removed.
 
 ### 13.3 What a file defines — `ModuleFileParser`
 
