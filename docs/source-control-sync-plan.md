@@ -110,6 +110,11 @@ comparison is a bonus.
 SSDT keeps. Both are passed through the same normaliser before comparing. These rules **define**
 what counts as a difference, so they are frozen here and each has a unit test:
 
+0. **Line endings are normalised first**, on both inputs and before lexing: `\r\n` → `\n`, then
+   any lone `\r` → `\n`. SQL Server stores a module's line endings exactly as the client sent
+   them (lead-verified: CRLF kept intact), so the server and the file can differ only in line
+   endings, depending on which tool deployed the module. Between tokens that is already harmless;
+   this rule exists for **multi-line string literals**, which rule 5 otherwise compares exactly.
 1. Everything **before** the first `CREATE`/`ALTER` token is ignored — author headers, BOMs,
    `SET ANSI_NULLS` lines.
 2. `CREATE`, `ALTER` and `CREATE OR ALTER` are equivalent.
@@ -343,7 +348,7 @@ public static class ModuleDefinitionNormalizer
 }
 ```
 
-Implements §7 exactly, **one unit test per rule**. The canonical form is a token sequence joined
+Implements §7 exactly (rules 0–6), **one unit test per rule**. The canonical form is a token sequence joined
 with a separator that cannot occur in T-SQL text (`\u0001`), so that `[ABB].[ABB.ChangeStatus]`
 (identifier, dot, identifier) and `ABB.ABB.ChangeStatus` (three identifiers) stay different.
 Identifiers and keywords are compared lower-cased (invariant); strings, numbers and punctuation

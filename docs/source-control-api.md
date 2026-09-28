@@ -163,6 +163,7 @@ needed, or re-derive from the table above (each row is one statement against a t
 > to compile it at all (Msg 111). Leading blank lines are kept as `\n`; leading spaces on the
 > `CREATE` line itself are NOT kept. Line endings are normalised to bare `\n` (LF) — no `\r`
 > survives anywhere in the stored definition, even though the source batch was sent with CRLF.
+> **LEAD CORRECTION: the two lines above are wrong. SQL Server stores line endings exactly as sent; the probe went through `sqlcmd`, which re-joins lines with LF. See §3.4.**
 > After `CREATE OR ALTER`, the definition's opening keyword is stored as `CREATE` with `OR ALTER`
 > replaced by blank space of the same width, not literally re-written as `CREATE OR ALTER`.**
 > **Confidence: HIGH — live evidence, byte- and character-position exact (`CHARINDEX`,
@@ -212,7 +213,30 @@ the normaliser (§13.6): don't assume a fixed run of leading whitespace maps 1:1
 and server text — rule 3 ("whitespace is ignored") already covers this, and this finding confirms
 rule 3 is doing real work, not just defending against formatting-only edits.
 
-### 3.4 Line endings — CRLF is not preserved
+### 3.4 Line endings — **LEAD CORRECTION (2026-09-28): CRLF IS preserved**
+
+> **The finding below is wrong, and the cause is the test harness, not SQL Server.** The batch
+> was sent with `sqlcmd -i`, and sqlcmd reads its input line by line and re-joins the lines with
+> LF when it builds each batch — so the server never received a carriage return.
+>
+> Re-tested by the lead through `Microsoft.Data.SqlClient` directly, sending a `CREATE PROCEDURE`
+> with CRLF line endings, including inside a multi-line string literal:
+> `sys.sql_modules.definition` kept **all 5 `\r` characters** (5 CR, 5 LF). **SQL Server stores a
+> module's line endings exactly as the client sent them.** Which endings a server holds therefore
+> depends on the tool that deployed each module (sqlcmd: LF; SSMS and SqlClient: whatever the
+> text had).
+>
+> **Consequence — the conclusion survives, for a better reason:** line endings must be normalised
+> on both sides before comparing, because they genuinely vary by deployment tool. `TsqlLexer`
+> already classes `\r` as whitespace (`char.IsWhiteSpace`), so endings *between* tokens were never
+> a risk. The real gap is **inside a multi-line string literal**, which §7 rule 5 compares
+> exactly. Fixed in the plan as §7 **rule 0**: `\r\n` → `\n`, then lone `\r` → `\n`, on both
+> inputs, before lexing.
+>
+> Lesson for future spikes: **a probe that goes through a client tool tests the tool too.** Verify
+> storage behaviour through the same client library the extension uses.
+
+*Original text, kept for the record:*
 
 Test C's definition (`tempdb.dbo.SCProbe_C`), sent to the server via `sqlcmd -i` reading a file
 saved with Windows CRLF line endings: `CHARINDEX(CHAR(13)+CHAR(10), definition)` over the whole
