@@ -1,6 +1,7 @@
 # Source Control Check — development plan
 
-Status: **planned, not started.** Branch `source-control-sync-feature`. Decided with the user
+Status: **in development (started 2026-09-28).** Branch `source-control-sync-feature`. Interface
+frozen in §13; wave 1 is the spike (§11) plus the Core work. Decided with the user
 (2026-09-28): **narrow scope** — a "forgot to commit" alarm — and **read-only**: it tells you
 what is missing and never writes to the repository or the database.
 
@@ -218,10 +219,231 @@ anything is called working. The Query History rules apply in full: nothing reads
 touches DTE off the UI thread; test doubles fail where the real thing would; diagnostics count
 "done", not "accepted".
 
-## 13. Frozen interface
+## 13. Frozen interface (frozen by the lead, 2026-09-28)
 
-*To be written by the lead before C1 starts, from §6–§8.* Exact names for `ModuleRef`,
-`DdlStatement`, `RepoIndex`, `SyncStatus`, `SyncFinding`, the normaliser and the map format.
+C1 owns everything under `src/SsmsDataAnalyzer.Core/SourceControl/`. V1 codes against these
+names and may not change them. Namespace `SsmsDataAnalyzer.Core.SourceControl`. Core stays
+`netstandard2.0`: no new packages, no ScriptDom, no file or database I/O — the Vsix reads files
+and servers and hands Core plain strings. Reuse `SsmsDataAnalyzer.Core.ScriptObject.TsqlLexer`.
+Nothing here throws on any input text; bad input produces "not recognised", never an exception.
+
+### 13.1 Identity
+
+```csharp
+public enum DbObjectKind { Procedure, View, Function, Trigger, Table }
+
+public sealed class ModuleRef : IEquatable<ModuleRef>
+{
+    public ModuleRef(string schema, string name, DbObjectKind kind);
+    public string       Schema { get; }   // null = the text did not say (unqualified)
+    public string       Name   { get; }   // e.g. "ABB.ChangeStatus" — dots are part of the name
+    public DbObjectKind Kind   { get; }
+    public ModuleRef WithSchema(string schema);
+    public override string ToString();    // "[ABB].[ABB.ChangeStatus]", ']' doubled inside
+}
+```
+
+**Equality is `Schema` + `Name`, both `OrdinalIgnoreCase`; `Kind` is NOT part of it.**
+Procedures, views, functions, tables and triggers share one namespace per schema in
+`sys.objects`, so the name alone identifies the object — and a history entry saying `ALTER
+FUNCTION` must still find a file that says `CREATE FUNCTION`. An unqualified ref (`Schema ==
+null`) never equals a qualified one: Core never assumes `dbo`. The Vsix resolves the schema on
+the server (`OBJECT_SCHEMA_NAME(OBJECT_ID(...))` in that database) and calls `WithSchema`.
+
+### 13.2 What executed text changed — `DdlDetector`
+
+```csharp
+public enum DdlAction { Create, Alter, CreateOrAlter, Drop }
+
+public sealed class DdlStatement
+{
+    public DdlAction Action { get; }
+    public ModuleRef Target { get; }
+}
+
+public static class DdlDetector
+{
+    public static IReadOnlyList<DdlStatement> Find(string sqlText);   // in order of appearance
+}
+```
+
+Recognises `CREATE | ALTER | CREATE OR ALTER | DROP` of `PROC | PROCEDURE | VIEW | FUNCTION |
+TRIGGER | TABLE`, including `DROP … IF EXISTS` and a comma-separated `DROP` list (one statement
+per target). Skipped, not reported: `#temp` / `##global` tables, `@table` variables, anything
+inside a string or a comment (the lexer already says so — so `EXEC('ALTER PROCEDURE …')` is
+knowingly missed), and `DROP`/`CREATE` of any other object type.
+
+### 13.3 What a file defines — `ModuleFileParser`
+
+```csharp
+public static class ModuleFileParser
+{
+    public static ModuleRef TryIdentify(string fileText);   // null = defines nothing we recognise
+}
+```
+
+The target of the **first** `CREATE`/`ALTER` of a §13.2 kind in the file. Must handle a leading
+BOM, an author header comment, `SET` lines before `CREATE`, and bracketed names containing dots.
+
+### 13.4 What the project includes — `SqlProjectReader`
+
+```csharp
+public sealed class SqlProjectFiles
+{
+    public bool IncludesAreImplicit { get; }       // SDK-style or wildcard project: every .sql counts
+    public bool Contains(string relativePath);     // '/' and '\' equivalent, OrdinalIgnoreCase
+}
+
+public static class SqlProjectReader
+{
+    public static SqlProjectFiles Read(string sqlprojXml);   // unreadable XML -> implicit, see below
+}
+```
+
+Explicit `<Build Include="…"/>` items (the classic SSDT format this repository uses) are the
+inventory. A project with **no** `Build` items, or any `Include` containing `*`, is treated as
+implicit: every `.sql` counts as included, so `OnDiskNotInProject` can never be reported for it.
+**Unreadable XML is also treated as implicit** — reporting 1,329 files as "not in project" on a
+parse error would be a false alarm of exactly the kind this feature must not produce.
+
+### 13.5 The index — `RepoIndex`
+
+```csharp
+public sealed class RepoFile
+{
+    public RepoFile(string relativePath, string text);
+    public string RelativePath { get; }
+    public string Text { get; }
+}
+
+public sealed class RepoEntry
+{
+    public string    RelativePath { get; }
+    public string    Text { get; }
+    public ModuleRef Module { get; }
+    public bool      InProject { get; }
+}
+
+public sealed class RepoIndex
+{
+    public static RepoIndex Build(IEnumerable<RepoFile> files, SqlProjectFiles project);
+    public IReadOnlyList<RepoEntry> Find(ModuleRef module);   // 0 = not in repo, >1 = defined twice
+    public int FileCount { get; }
+    public int UnrecognisedFileCount { get; }                  // .sql files defining nothing we know
+}
+```
+
+### 13.6 "Did it really change?" — `ModuleDefinitionNormalizer`
+
+```csharp
+public static class ModuleDefinitionNormalizer
+{
+    public static string Normalize(string definition);   // canonical form of the §7 rules
+    public static bool   AreEquivalent(string a, string b);
+}
+```
+
+Implements §7 exactly, **one unit test per rule**. The canonical form is a token sequence joined
+with a separator that cannot occur in T-SQL text (`\u0001`), so that `[ABB].[ABB.ChangeStatus]`
+(identifier, dot, identifier) and `ABB.ABB.ChangeStatus` (three identifiers) stay different.
+Identifiers and keywords are compared lower-cased (invariant); strings, numbers and punctuation
+exactly. Known and accepted: in a case-sensitive database a case-only rename is not reported.
+
+### 13.7 The verdict — `SyncChecker`
+
+```csharp
+public enum ChangeSource { QueryHistory, ServerModifyDate, Both }
+
+public enum SyncStatus
+{
+    Matches, DiffersFromRepo, MissingFromRepo, OnDiskNotInProject, DroppedButInRepo, NotCompared
+}
+
+public sealed class ChangeCandidate
+{
+    public ChangeCandidate(string server, string database, ModuleRef module,
+                           DateTime changedUtc, ChangeSource source, DdlAction? lastAction);
+    public string Server { get; }
+    public string Database { get; }
+    public ModuleRef Module { get; }
+    public DateTime ChangedUtc { get; }
+    public ChangeSource Source { get; }
+    public DdlAction? LastAction { get; }        // from history; null for a server-only candidate
+}
+
+public static class ChangeCandidates
+{
+    // One candidate per (server, database, module); server and database OrdinalIgnoreCase.
+    // Present in both inputs -> Source = Both, ChangedUtc = the later, LastAction from history.
+    public static IReadOnlyList<ChangeCandidate> Merge(
+        IEnumerable<ChangeCandidate> fromHistory, IEnumerable<ChangeCandidate> fromServer);
+}
+
+public sealed class ServerObjectState
+{
+    public ServerObjectState(bool exists, DbObjectKind? kind, string definition);
+    public bool Exists { get; }
+    public DbObjectKind? Kind { get; }
+    public string Definition { get; }            // null = table, encrypted, CLR, or unreadable
+}
+
+public sealed class SyncFinding
+{
+    public ChangeCandidate Candidate { get; }
+    public SyncStatus Status { get; }
+    public string RelativePath { get; }          // null when no file is involved
+    public string Reason { get; }                // always set; object and file names only
+}
+
+public static class SyncChecker
+{
+    /// <param name="server">null = could not reach that server</param>
+    /// <param name="repo">null = that database is not mapped to a project</param>
+    public static SyncFinding Check(ChangeCandidate candidate, ServerObjectState server, RepoIndex repo);
+}
+```
+
+Decision order — **frozen, and each branch has a test**:
+
+1. `repo == null` → `NotCompared` ("database is not mapped to a project").
+2. `candidate.Module.Schema == null` → `NotCompared` ("could not tell which schema").
+3. `server == null` → `NotCompared` ("no open connection to <server>").
+4. Object **gone** from the server: a file defines it → `DroppedButInRepo`; no file →
+   `Matches` (dropped and gone from the repo too: consistent).
+5. `repo.Find` returns more than one file → `NotCompared` ("defined in N files: …").
+6. No file → `MissingFromRepo`.
+7. The one file is not in the project → `OnDiskNotInProject`. **Checked before comparing**: a
+   file SSDT ignores is the bigger problem, and comparing it would suggest it matters.
+8. It is a table → `NotCompared` ("tables are not compared yet — check <file> by hand").
+9. `Definition == null` → `NotCompared` ("definition not readable: encrypted or CLR").
+10. `AreEquivalent` → `Matches`, otherwise `DiffersFromRepo`.
+
+### 13.8 The map — `SourceControlMap`
+
+```csharp
+public sealed class SourceControlMap
+{
+    public static SourceControlMap Parse(string text);           // never throws
+    public string FindProject(string server, string database);    // null = not mapped
+    public SourceControlMap With(string database, string server, string projectPath); // server null = any
+    public string Serialize();                                    // keeps comments and line order
+    public IReadOnlyList<string> Problems { get; }                // "line 4: no '='", …
+}
+```
+
+Format as §5: `database[@server] = path`. `#` starts a comment; blank lines ignored; the key is
+split on the **first** `=` and then on the **last** `@`; keys compare `OrdinalIgnoreCase`. A
+server-specific line wins over a database-only one. `With` replaces the matching line in place
+or appends one; `Serialize` round-trips everything else untouched.
+
+### 13.9 IDs (lead-assigned — do not change)
+
+| Name | Value |
+|---|---|
+| `PackageIds.CheckSourceControlCommandId` | `0x0500` |
+| `PackageGuids.SourceControlToolWindowPersistenceGuid` | `c3e8a1f4-6b2d-4e97-8a53-0f1d9b7e2c46` |
+| CanonicalName | `SsmsDataAnalyzer.CheckSourceControl` |
+| Default shortcut | `Global::Ctrl+Alt+Q, C`, added to `DefaultShortcuts` with `ShortcutSetVersion` bumped to `"2"` so existing users pick it up — the existing rules still leave any bound command or taken key alone |
 
 ## 14. Open decisions
 
