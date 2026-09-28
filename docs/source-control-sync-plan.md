@@ -144,7 +144,8 @@ object is reported, not guessed between.
    binding).
 2. **Panel** (dockable tool window) listing findings: object, kind, database, server, when it
    changed, where the change came from (history / server), status, file.
-   - Window filter: Today / Last 7 days / Last 30 days (history retention is 30 days).
+   - Window filter: Today / Last 7 days / **Last 15 days (default)** / Last 30 days (history
+     retention is 30 days).
    - Findings grouped by database; `Matches` hidden unless "Show all" is ticked.
    - The line under the list says what was checked and why anything was skipped — the lesson of
      Query History: **a silent result needs a visible reason**.
@@ -229,6 +230,6 @@ touches DTE off the UI thread; test doubles fail where the real thing would; dia
 | D1 | Scope | **Decided (user, 2026-09-28):** the narrow "forgot to commit" alarm |
 | D2 | Write-back | **Decided (user, 2026-09-28):** read-only first; capture is Phase 3 |
 | D3 | Report comment-only changes? | No — otherwise formatting noise buries real changes. Revisit if a missed comment ever matters |
-| D4 | Default window | Last 7 days |
+| D4 | Default window | **Decided (user, 2026-09-28):** last 15 days |
 | D5 | Mapping stored where | Plain text per user (§5): no query text, no secrets, hand-editable |
 | D6 | Tables in Phase 1 | Detected from history and reported as `NotCompared`; compared in Phase 2 |
