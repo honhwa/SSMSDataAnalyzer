@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.0** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.1** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.1 (preview)** — Check source control now uses **Object Explorer's connection** too. In 0.28.0 it only reused query windows, so with every query window disconnected nothing could be checked even though Object Explorer was connected to that very server. It looks the server up by its real name (Object Explorer may display it under another name, such as "Test8 - OLTP"), and when no query window is connected the server-side scan uses the **database selected in Object Explorer**; the status line says which connection it used. Also: a large script that touched thousands of objects no longer fails the whole check (SQL Server's 2,100-parameter limit).
 
 **0.28.0 (preview)** — New: **Check source control…** (Tools menu, or **Ctrl+Alt+Q, C**). A read-only alarm for database changes you forgot to commit: it looks at what you created, altered or dropped (from Query History) and what changed on the server you are connected to, over the last 15 days, and checks each object against the SSDT project you map that database to. It reports objects **missing from the repo**, **different from the file**, **on disk but not in the `.sqlproj`** (which SSDT silently ignores), and **dropped but still in the repo**. It never writes to the repository or to any database. Right-click a finding for **Compare** (server vs file), open the file, or script the server's version into a new query window. Also fixed: a default shortcut you deleted can no longer come back when a new version adds a shortcut.
 

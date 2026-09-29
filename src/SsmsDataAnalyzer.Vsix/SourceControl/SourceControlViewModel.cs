@@ -133,6 +133,20 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                     ObjectExplorer.OeDiagnostics.Warn("Source control check: could not read the current query window's connection (" + ex.GetType().Name + ").");
                 }
 
+                // No connected query window: use the database selected in Object Explorer as the
+                // scope of the modify_date scan (field report: all windows disconnected, OE
+                // connected, AgricultureFinances selected, scan skipped).
+                string scopeSource = currentConnStr != null ? "query window" : null;
+                if (currentConnStr == null
+                    && ObjectExplorerConnectionFinder.TryGetSelectedDatabase(Package,
+                        out string oeServer, out string oeDatabase, out string oeConnStr))
+                {
+                    currentServer = oeServer;
+                    currentDatabase = oeDatabase;
+                    currentConnStr = oeConnStr;
+                    scopeSource = "Object Explorer selection";
+                }
+
                 int windowDays = SelectedWindow?.Days ?? 15;
                 DateTime cutoffUtc = DateTime.UtcNow.AddDays(-windowDays);
 
@@ -161,7 +175,7 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 }
                 else
                 {
-                    modifyDateSkipReason = "no active query window connection";
+                    modifyDateSkipReason = "no connected query window, and no database selected in Object Explorer";
                 }
 
                 IReadOnlyList<ChangeCandidate> merged = ChangeCandidates.Merge(historyCandidates, serverCandidates);
@@ -189,7 +203,11 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                     UIConnectionInfo found = string.IsNullOrEmpty(server) ? null : History.QueryHistoryConnectionFinder.TryFind(dte, server, null);
                     if (found == null)
                     {
-                        connByGroup[group.Key] = (null, server, database, "no open connection to " + server);
+                        // No query window on that server: Object Explorer's connection counts too.
+                        string oeCs = ObjectExplorerConnectionFinder.TryBuildForServer(Package, server, database);
+                        connByGroup[group.Key] = oeCs != null
+                            ? (oeCs, server, database, (string)null)
+                            : (null, server, database, "no open query window or Object Explorer connection to " + server);
                         continue;
                     }
 
@@ -278,7 +296,13 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 var summary = new List<string>
                 {
                     historyCandidates.Count + " candidate(s) from query history",
-                    serverCandidates.Count + " from server modify_date" + (modifyDateSkipReason != null ? " (skipped: " + modifyDateSkipReason + ")" : string.Empty),
+                    serverCandidates.Count + " from server modify_date"
+                        + (modifyDateSkipReason != null
+                            ? " (skipped: " + modifyDateSkipReason + ")"
+                            // Say where the scan's connection came from: without it, "why did it
+                            // work this time" has no answer on screen. Database name only — the
+                            // user's own, shown to them, never logged.
+                            : " (" + currentDatabase + ", via " + scopeSource + ")"),
                     databasesChecked + " database(s) checked against a server",
                 };
                 if (databasesUnmapped > 0) summary.Add(databasesUnmapped + " database(s) not mapped to a project");
@@ -369,7 +393,7 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 }
 
                 UIConnectionInfo found = History.QueryHistoryConnectionFinder.TryFind(dte, server, null);
-                if (found == null) return null;
+                if (found == null) return ObjectExplorerConnectionFinder.TryBuildForServer(Package, server, database);
                 ResultsGrid.GridConnectionInfo.TryBuild(found, database, out string cs);
                 return cs;
             }

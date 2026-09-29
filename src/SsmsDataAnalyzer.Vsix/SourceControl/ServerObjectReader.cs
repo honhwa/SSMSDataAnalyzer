@@ -48,6 +48,18 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         public static async Task<Dictionary<ModuleRef, string>> ResolveSchemasAsync(
             string connectionString, string database, IReadOnlyList<ModuleRef> unqualified)
         {
+            var all = new Dictionary<ModuleRef, string>();
+            foreach (var chunk in Chunks(unqualified))
+            {
+                foreach (var pair in await ResolveSchemasChunkAsync(connectionString, database, chunk).ConfigureAwait(false))
+                    all[pair.Key] = pair.Value;
+            }
+            return all;
+        }
+
+        private static async Task<Dictionary<ModuleRef, string>> ResolveSchemasChunkAsync(
+            string connectionString, string database, IReadOnlyList<ModuleRef> unqualified)
+        {
             var resolved = new Dictionary<ModuleRef, string>();
             if (unqualified == null || unqualified.Count == 0) return resolved;
 
@@ -98,6 +110,33 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         /// issued. Modules that do not exist come back with <c>Exists = false</c>.
         /// </summary>
         public static async Task<Dictionary<ModuleRef, ServerObjectState>> ReadStatesAsync(
+            string connectionString, string database, IReadOnlyList<ModuleRef> modules)
+        {
+            var all = new Dictionary<ModuleRef, ServerObjectState>();
+            foreach (var chunk in Chunks(modules))
+            {
+                foreach (var pair in await ReadStatesChunkAsync(connectionString, database, chunk).ConfigureAwait(false))
+                    all[pair.Key] = pair.Value;
+            }
+            return all;
+        }
+
+        /// <summary>
+        /// Both batched reads send one parameter per object, and SQL Server rejects a request
+        /// with more than 2,100 parameters. Field report: a single executed deployment script
+        /// nominated 523 objects at once; a bigger one would have failed the entire check.
+        /// 500 per round trip keeps every batch far under the limit.
+        /// </summary>
+        private const int ChunkSize = 500;
+
+        private static IEnumerable<IReadOnlyList<ModuleRef>> Chunks(IReadOnlyList<ModuleRef> items)
+        {
+            if (items == null) yield break;
+            for (int i = 0; i < items.Count; i += ChunkSize)
+                yield return items.Skip(i).Take(ChunkSize).ToList();
+        }
+
+        private static async Task<Dictionary<ModuleRef, ServerObjectState>> ReadStatesChunkAsync(
             string connectionString, string database, IReadOnlyList<ModuleRef> modules)
         {
             var result = new Dictionary<ModuleRef, ServerObjectState>();
