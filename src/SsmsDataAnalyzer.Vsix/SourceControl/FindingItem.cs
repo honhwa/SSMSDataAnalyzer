@@ -8,17 +8,24 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
     /// strings only, no logic (docs/source-control-sync-plan.md §9 Phase 1 item 2).</summary>
     internal sealed class FindingItem
     {
-        public FindingItem(SyncFinding finding)
+        public FindingItem(SyncFinding finding, int summaryCount = 0)
         {
             Finding = finding;
+            SummaryCount = summaryCount;
         }
+
+        /// <summary>More than zero when this row stands for a whole unmapped database's changed
+        /// objects rather than for one object (see SourceControlViewModel).</summary>
+        public int SummaryCount { get; }
 
         public SyncFinding Finding { get; }
 
         public string Server => Finding.Candidate?.Server ?? string.Empty;
         public string Database => Finding.Candidate?.Database ?? string.Empty;
-        public string Object => Finding.Candidate?.Module?.ToString() ?? string.Empty;
-        public string Kind => Finding.Candidate?.Module?.Kind.ToString() ?? string.Empty;
+        public string Object => SummaryCount > 0
+            ? SummaryCount + (SummaryCount == 1 ? " changed object" : " changed objects")
+            : Finding.Candidate?.Module?.ToString() ?? string.Empty;
+        public string Kind => SummaryCount > 0 ? string.Empty : Finding.Candidate?.Module?.Kind.ToString() ?? string.Empty;
         public string ChangedText => Finding.Candidate == null
             ? string.Empty
             : Finding.Candidate.ChangedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
@@ -81,7 +88,9 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         /// sit next to each other. \u0001 cannot occur in either name.</summary>
         public string GroupSortKey => Database + "\u0001" + Server;
         public string RelativePath => Finding.RelativePath ?? string.Empty;
-        public string Reason => Finding.Reason ?? string.Empty;
+        public string Reason => SummaryCount > 0
+            ? "database is not mapped to a project -- right-click > Map database to project... to check these"
+            : Finding.Reason ?? string.Empty;
         public bool IsMatch => Finding.Status == SyncStatus.Matches;
 
         /// <summary>Whether "Compare" makes sense for this row -- a real repo file and a real

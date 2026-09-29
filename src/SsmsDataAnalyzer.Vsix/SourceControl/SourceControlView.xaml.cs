@@ -32,11 +32,11 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
         /// <summary>Called once by SourceControlToolWindow right after construction. The check
         /// also runs when the panel opens (docs/source-control-sync-plan.md §9 Phase 1 item 1).</summary>
-        internal void Initialize(AsyncPackage package)
+        internal void Initialize(AsyncPackage package, bool startedInQueryWindow = false)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             ViewModel.Package = package;
-            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckAsync())
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckAsync(startedInQueryWindow))
                 .FileAndForget("SsmsDataAnalyzer/SourceControl/InitialCheck");
         }
 

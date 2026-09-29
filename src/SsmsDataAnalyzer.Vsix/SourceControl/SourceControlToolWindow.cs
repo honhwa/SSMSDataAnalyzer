@@ -23,10 +23,10 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
         /// <summary>The single authoritative way SourceControlCommand wires this pane to its
         /// package and starts its first (read-only) check.</summary>
-        internal void Initialize(AsyncPackage package)
+        internal void Initialize(AsyncPackage package, bool startedInQueryWindow = false)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            _view.Initialize(package);
+            _view.Initialize(package, startedInQueryWindow);
         }
 
         protected override void Dispose(bool disposing)

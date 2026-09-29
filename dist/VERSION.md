@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.6** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.7** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.7 (preview)** — Check source control now checks **the database you selected in Object Explorer**, even if your last query tab is on another server. Before, SSMS's "active document" (your last query tab, e.g. on AG1LISTENER) was preferred over the selection, so clicking a database on SQLTEST7 and checking scanned the wrong server. The query window is used only when you start the check from inside it (e.g. **Ctrl+Alt+Q, C** while typing) or nothing is selected in Object Explorer. Also: a database not mapped to a project is now **one row** ("178 changed objects — map to check these") instead of one row per object.
 
 **0.28.6 (preview)** — Check source control: choose **where it looks** — *Server + history* (default), *History* (only what you ran) or *Server* (what changed on the checked databases, by anyone). **Tables are now compared** when your history names them: column names, types, sizes, nullability and identity, against the project's `CREATE TABLE`. Differences are spelled out, e.g. *"[Code]: nvarchar(60) in repo, nvarchar(50) on server"*. Indexes and constraints are not compared, and a table found only by the server scan still says so rather than being guessed at. Also fixed: a table whose file adds constraints in separate `ALTER TABLE` blocks is no longer reported as "defined in several files".
 

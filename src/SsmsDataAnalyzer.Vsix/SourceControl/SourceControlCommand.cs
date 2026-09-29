@@ -45,6 +45,14 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
+            // Read where the user was BEFORE the panel is shown and takes the focus. Field report:
+            // with the last-used query tab on AG1LISTENER, clicking AgricultureFinances on
+            // SQLTEST7 in Object Explorer and choosing Tools > Check source control scanned
+            // AG1LISTENER, because the query window was preferred over the selection. The user's
+            // way of working is "click a database, then check", so the check follows the place
+            // it was started from.
+            bool startedInQueryWindow = IsQueryWindowActive();
+
             _package.JoinableTaskFactory.RunAsync(async () =>
             {
                 var pane = await _package.ShowToolWindowAsync(
@@ -59,8 +67,27 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                     return;
                 }
 
-                pane.Initialize(_package);
+                pane.Initialize(_package, startedInQueryWindow);
             }).FileAndForget("SsmsDataAnalyzer/SourceControl/SourceControlCommand/Execute");
+        }
+
+        /// <summary>True when the focused window is a SQL query editor — i.e. the command came
+        /// from the keyboard while typing a query, not from Object Explorer or the Tools menu
+        /// used from there.</summary>
+        private bool IsQueryWindowActive()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var dte = ((IServiceProvider)_package).GetService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                EnvDTE.Document document = dte?.ActiveWindow?.Document;
+                return document != null && DataAnalyzerPackage.FindSqlScriptEditorControl(document) != null;
+            }
+            catch (Exception ex)
+            {
+                ObjectExplorer.OeDiagnostics.Warn("'Check source control' could not tell which window was active (" + ex.GetType().Name + ").");
+                return false;
+            }
         }
     }
 }

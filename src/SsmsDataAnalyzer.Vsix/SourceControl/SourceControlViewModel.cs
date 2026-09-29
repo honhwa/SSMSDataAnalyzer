@@ -167,7 +167,11 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
         // ---- the check itself ----------------------------------------------------------------
 
-        public async Task RunCheckAsync()
+        /// <param name="startedInQueryWindow">True only when the check was started while typing
+        /// in a query window. Otherwise — Object Explorer, the Tools menu used from there, or this
+        /// panel's own buttons — the database selected in Object Explorer is the scope, and the
+        /// active query window is only the fallback when nothing is selected there.</param>
+        public async Task RunCheckAsync(bool startedInQueryWindow = false)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             if (_disposed || Package == null) return;
@@ -203,11 +207,14 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                     ObjectExplorer.OeDiagnostics.Warn("Source control check: could not read the current query window's connection (" + ex.GetType().Name + ").");
                 }
 
-                // No connected query window: use the database selected in Object Explorer as the
-                // scope of the modify_date scan (field report: all windows disconnected, OE
-                // connected, AgricultureFinances selected, scan skipped).
+                // Which database this check is about. Unless it was started from a query window,
+                // the Object Explorer selection wins over the last-used query window (field
+                // report: AgricultureFinances selected on SQLTEST7, AG1LISTENER scanned instead,
+                // because SSMS keeps the last query tab as the "active document" even while you
+                // click in Object Explorer). The query window stays the fallback.
                 string scopeSource = currentConnStr != null ? "query window" : null;
-                if (currentConnStr == null
+                bool preferObjectExplorer = !startedInQueryWindow || currentConnStr == null;
+                if (preferObjectExplorer
                     && ObjectExplorerConnectionFinder.TryGetSelectedDatabase(Package,
                         out string oeServer, out string oeDatabase, out string oeConnStr))
                 {
@@ -327,6 +334,7 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 SourceControlMap map = await SourceControlMapStore.LoadAsync().ConfigureAwait(true);
 
                 var findings = new List<SyncFinding>();
+                var summaryCounts = new Dictionary<SyncFinding, int>();
                 int databasesChecked = 0, databasesUnmapped = 0, serversUnreachable = 0;
                 var skipNotes = new List<string>();
 
@@ -349,6 +357,17 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                     else
                     {
                         databasesUnmapped++;
+
+                        // ONE row for an unmapped database, not one per object. Field report: 178
+                        // identical "database is not mapped to a project" rows for CeresSubsidy
+                        // buried everything else. Nothing can be compared without a project, so the
+                        // server is not read either; the row carries the count and the
+                        // "Map database to project..." action.
+                        ChangeCandidate latest = candidates.OrderByDescending(c => c.ChangedUtc).First();
+                        SyncFinding unmappedRow = SyncChecker.Check(latest, null, null);
+                        summaryCounts[unmappedRow] = candidates.Count;
+                        findings.Add(unmappedRow);
+                        continue;
                     }
 
                     Dictionary<ModuleRef, ServerObjectState> states = new Dictionary<ModuleRef, ServerObjectState>();
@@ -421,7 +440,9 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 }
 
                 // 6. Back on the UI thread: publish.
-                _allFindings = findings.Select(f => new FindingItem(f)).ToList();
+                _allFindings = findings
+                    .Select(f => new FindingItem(f, summaryCounts.TryGetValue(f, out int count) ? count : 0))
+                    .ToList();
                 RebuildGroups();
 
                 var summary = new List<string>
