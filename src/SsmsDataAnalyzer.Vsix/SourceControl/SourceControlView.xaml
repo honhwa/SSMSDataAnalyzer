@@ -58,7 +58,7 @@
                      Object Explorer selection never drops a server you just looked at. This resets
                      that list to the selected database alone. -->
                 <Button Style="{StaticResource ScToolbarButton}" Content="Check selected only"
-                        ToolTip="Forget the other databases checked this session and scan only the selected one"
+                        ToolTip="Reset: show only the selected database. Forgets the other databases checked this session and hides your history on other servers until the next Check now"
                         Click="CheckSelectedOnlyButton_Click"
                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
                 <Button Style="{StaticResource ScToolbarButton}" Content="Check now"

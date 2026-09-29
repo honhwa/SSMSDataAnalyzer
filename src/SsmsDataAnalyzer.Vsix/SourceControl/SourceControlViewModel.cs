@@ -197,8 +197,9 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
                 // 3. sys.objects.modify_date on EVERY database checked this session (see
                 //    _scannedScopes), the current one included.
-                if (_checkSelectedOnly) _scannedScopes.Clear();
+                bool selectedOnly = _checkSelectedOnly;
                 _checkSelectedOnly = false;
+                if (selectedOnly) _scannedScopes.Clear();
                 if (!string.IsNullOrEmpty(currentServer) && !string.IsNullOrEmpty(currentDatabase)
                     && !_scannedScopes.Any(sc => SameScope(sc, currentServer, currentDatabase)))
                 {
@@ -240,6 +241,19 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 }
 
                 IReadOnlyList<ChangeCandidate> merged = ChangeCandidates.Merge(historyCandidates, serverCandidates);
+
+                // "Check selected only" must leave ONLY the selected database. Clearing the scan
+                // list is not enough on its own: Query History names every server you ran DDL on,
+                // so without this filter the other groups came straight back and the reset did
+                // not reset (user question: "what if I want to remove all and leave only one").
+                // The next "Check now" shows everything again.
+                if (selectedOnly)
+                {
+                    merged = merged
+                        .Where(c => string.Equals(c.Server, currentServer, StringComparison.OrdinalIgnoreCase)
+                                 && string.Equals(c.Database, currentDatabase, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
 
                 // 4. Group by (server, database); resolve a connection string per group -- the
                 //    current window's own for its own (server, database), otherwise an open
@@ -369,6 +383,13 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 if (databasesUnmapped > 0) summary.Add(databasesUnmapped + " database(s) not mapped to a project");
                 if (serversUnreachable > 0) summary.Add(serversUnreachable + " server(s)/database(s) had no open connection");
                 if (skipNotes.Count > 0) summary.Add("details: " + string.Join("; ", skipNotes.Take(5)));
+
+                if (selectedOnly)
+                {
+                    summary.Insert(0, string.IsNullOrEmpty(currentDatabase)
+                        ? "Showing nothing: select a database in Object Explorer (or use a connected query window), then Check selected only"
+                        : "Showing only " + currentDatabase + " on " + currentServer + " (Check now shows everything again)");
+                }
 
                 StatusText = string.Join("   |   ", summary);
             }
