@@ -104,6 +104,37 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 .FileAndForget("SsmsDataAnalyzer/SourceControl/MapToProject");
         }
 
+        /// <summary>
+        /// Right-click selects the row under the pointer before the menu opens. A WPF DataGrid
+        /// does not do this on its own, and every menu action works on SelectedFinding — so
+        /// right-clicking a row you had not left-clicked first ran Compare (or Script, or Copy)
+        /// on whichever row was selected before: the wrong object, with nothing to say so.
+        /// Right-clicking empty space clears the selection, so the actions have nothing to act
+        /// on rather than something stale.
+        /// </summary>
+        private void FindingsGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var node = e.OriginalSource as DependencyObject;
+            while (node != null && !(node is DataGridRow))
+            {
+                node = node is System.Windows.Media.Visual || node is System.Windows.Media.Media3D.Visual3D
+                    ? System.Windows.Media.VisualTreeHelper.GetParent(node)
+                    : LogicalTreeHelper.GetParent(node);
+            }
+
+            if (node is DataGridRow row)
+            {
+                row.IsSelected = true;
+                FindingsGrid.SelectedItem = row.Item;
+                row.Focus();
+            }
+            else
+            {
+                FindingsGrid.SelectedItem = null;
+            }
+        }
+
         private void FindingsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

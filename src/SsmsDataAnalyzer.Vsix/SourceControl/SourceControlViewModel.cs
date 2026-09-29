@@ -76,7 +76,16 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             private set { _statusText = value; OnPropertyChanged(); }
         }
 
-        public ObservableCollection<DatabaseGroupItem> Groups { get; } = new ObservableCollection<DatabaseGroupItem>();
+        private readonly ObservableCollection<FindingItem> _visibleFindings = new ObservableCollection<FindingItem>();
+
+        /// <summary>
+        /// Every visible finding in ONE list, grouped by WPF rather than by nesting one grid per
+        /// group. Field report: each nested grid had to be capped (MaxHeight 260) because a grid
+        /// inside a scrolling list gets unlimited height and stops virtualising, so the grid sat
+        /// at a fixed size however the window was resized or docked. One grid in the window's
+        /// star row sizes with the window and keeps virtualisation even with grouping on.
+        /// </summary>
+        public System.Windows.Data.ListCollectionView FindingsView { get; }
 
         private FindingItem _selectedFinding;
         public FindingItem SelectedFinding
@@ -92,6 +101,11 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
         public SourceControlViewModel()
         {
+            FindingsView = new System.Windows.Data.ListCollectionView(_visibleFindings);
+            FindingsView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(FindingItem.GroupHeader)));
+            FindingsView.SortDescriptions.Add(new SortDescription(nameof(FindingItem.GroupSortKey), ListSortDirection.Ascending));
+            FindingsView.SortDescriptions.Add(new SortDescription(nameof(FindingItem.Object), ListSortDirection.Ascending));
+
             _selectedWindow = WindowOptions[2]; // Last 15 days -- the default (§9 Phase 1 item 2).
         }
 
@@ -355,28 +369,13 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         private void RebuildGroups()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            Groups.Clear();
 
-            var visible = ShowAll ? _allFindings : _allFindings.Where(f => !f.IsMatch).ToList();
-            // One group per (server, database), never per database alone. The same database on
-            // DEV and UAT is checked separately against the same project, and grouping by name
-            // only put both environments' rows under ONE header naming just the first server,
-            // with no column to tell them apart (found while answering "can I compare server by
-            // server?"). Ordered by database, then server, so DEV and UAT of one database sit
-            // next to each other and read as a side-by-side.
-            var byServerAndDb = visible
-                .GroupBy(f => new { f.Server, f.Database })
-                .OrderBy(g => g.Key.Database, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(g => g.Key.Server, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var byDb in byServerAndDb)
+            // Grouping (per server AND database — never per database alone, 0.28.2) and ordering
+            // come from FindingsView's descriptions; this only decides what is visible.
+            _visibleFindings.Clear();
+            foreach (var item in ShowAll ? _allFindings : _allFindings.Where(f => !f.IsMatch))
             {
-                var groupItem = new DatabaseGroupItem(byDb.Key.Database, byDb.Key.Server);
-                foreach (var item in byDb.OrderBy(f => f.Object, StringComparer.OrdinalIgnoreCase))
-                {
-                    groupItem.Findings.Add(item);
-                }
-                Groups.Add(groupItem);
+                _visibleFindings.Add(item);
             }
         }
 

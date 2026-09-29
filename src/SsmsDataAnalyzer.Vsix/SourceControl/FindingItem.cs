@@ -38,7 +38,48 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 }
             }
         }
+        /// <summary>The raw status, for the row-colour triggers. Not shown to the user.</summary>
         public string StatusText => Finding.Status.ToString();
+
+        /// <summary>What the Status column shows. The raw enum names ("NotCompared",
+        /// "DiffersFromRepo") were on screen in the first preview.</summary>
+        public string StatusDisplay
+        {
+            get
+            {
+                switch (Finding.Status)
+                {
+                    case SyncStatus.Matches: return "Matches repo";
+                    case SyncStatus.DiffersFromRepo: return "Differs from repo";
+                    case SyncStatus.MissingFromRepo: return "Missing from repo";
+                    case SyncStatus.OnDiskNotInProject: return "Not in .sqlproj";
+                    case SyncStatus.DroppedButInRepo: return "Dropped, still in repo";
+                    default: return "Not compared";
+                }
+            }
+        }
+
+        /// <summary>Where the change was noticed, in words.</summary>
+        public string SourceDisplay
+        {
+            get
+            {
+                switch (Finding.Candidate?.Source)
+                {
+                    case ChangeSource.QueryHistory: return "Your history";
+                    case ChangeSource.ServerModifyDate: return "Server";
+                    case ChangeSource.Both: return "History + server";
+                    default: return string.Empty;
+                }
+            }
+        }
+
+        /// <summary>One group per (server, database) — see SourceControlViewModel.RebuildGroups.</summary>
+        public string GroupHeader => string.IsNullOrEmpty(Server) ? Database : Database + " (" + Server + ")";
+
+        /// <summary>Orders groups by database, then server, so the environments of one database
+        /// sit next to each other. \u0001 cannot occur in either name.</summary>
+        public string GroupSortKey => Database + "\u0001" + Server;
         public string RelativePath => Finding.RelativePath ?? string.Empty;
         public string Reason => Finding.Reason ?? string.Empty;
         public bool IsMatch => Finding.Status == SyncStatus.Matches;
@@ -55,22 +96,5 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
         public bool IsUnmapped => Finding.Status == SyncStatus.NotCompared
             && (Finding.Reason ?? string.Empty).IndexOf("not mapped to a project", System.StringComparison.OrdinalIgnoreCase) >= 0;
-    }
-
-    /// <summary>One database's findings, for the "grouped by database" display
-    /// (docs/source-control-sync-plan.md §9 Phase 1 item 2).</summary>
-    internal sealed class DatabaseGroupItem
-    {
-        public DatabaseGroupItem(string database, string server)
-        {
-            Database = database;
-            Server = server;
-        }
-
-        public string Database { get; }
-        public string Server { get; }
-        public ObservableCollection<FindingItem> Findings { get; } = new ObservableCollection<FindingItem>();
-
-        public string Header => string.IsNullOrEmpty(Server) ? Database : Database + " (" + Server + ")";
     }
 }

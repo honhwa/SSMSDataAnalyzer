@@ -32,48 +32,6 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
-        <DataTemplate x:Key="FindingsGridTemplate">
-            <DataGrid ItemsSource="{Binding Findings}" AutoGenerateColumns="False" IsReadOnly="True"
-                      HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
-                      SelectionUnit="FullRow" SelectionMode="Single" GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="{StaticResource ScGridLineBrush}"
-                      MaxHeight="260" ScrollViewer.CanContentScroll="True"
-                      SelectedItem="{Binding DataContext.SelectedFinding, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWayToSource}"
-                      MouseDoubleClick="FindingsGrid_MouseDoubleClick">
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding StatusText}" Value="DiffersFromRepo">
-                                <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding StatusText}" Value="DroppedButInRepo">
-                                <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </DataGrid.RowStyle>
-                <DataGrid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Compare" Click="CompareMenuItem_Click" />
-                        <MenuItem Header="Open repo file" Click="OpenRepoFileMenuItem_Click" />
-                        <MenuItem Header="Script server definition into new window" Click="ScriptMenuItem_Click" />
-                        <MenuItem Header="Copy object name" Click="CopyNameMenuItem_Click" />
-                        <Separator />
-                        <MenuItem Header="Map database to project..." Click="MapMenuItem_Click" />
-                    </ContextMenu>
-                </DataGrid.ContextMenu>
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header=" " Binding="{Binding StatusGlyph}" Width="24" />
-                    <DataGridTextColumn Header="Object" Binding="{Binding Object}" Width="220" />
-                    <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="80" />
-                    <DataGridTextColumn Header="Changed" Binding="{Binding ChangedText}" Width="130" />
-                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="90" />
-                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="140" />
-                    <DataGridTextColumn Header="File" Binding="{Binding RelativePath}" Width="180" />
-                    <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" />
-                </DataGrid.Columns>
-            </DataGrid>
-        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Margin="6">
@@ -100,18 +58,86 @@
                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
         </Grid>
 
-        <!-- Findings grouped by database (item 2). -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Groups}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Expander Header="{Binding Header}" IsExpanded="True" Margin="0,0,0,8">
-                            <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FindingsGridTemplate}" />
-                        </Expander>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+        <!--
+            Findings: ONE grid in the star row, so it grows and shrinks with the window when it is
+            resized or docked. Grouped per (server, database) by the view model's
+            ListCollectionView. The first preview nested one grid per group inside a ScrollViewer;
+            a grid there gets unlimited height and stops virtualising, so each had to be capped at
+            a fixed MaxHeight — which is exactly why it did not follow the window (field report).
+            VirtualizingPanel.IsVirtualizingWhenGrouping keeps a 500-row result cheap.
+        -->
+        <DataGrid x:Name="FindingsGrid" Grid.Row="1"
+                  ItemsSource="{Binding FindingsView}" AutoGenerateColumns="False" IsReadOnly="True"
+                  HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                  SelectionUnit="FullRow" SelectionMode="Single" GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="{StaticResource ScGridLineBrush}"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  SelectedItem="{Binding SelectedFinding, Mode=OneWayToSource}"
+                  PreviewMouseRightButtonDown="FindingsGrid_PreviewMouseRightButtonDown"
+                  MouseDoubleClick="FindingsGrid_MouseDoubleClick">
+            <DataGrid.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.ContainerStyle>
+                        <Style TargetType="{x:Type GroupItem}">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type GroupItem}">
+                                        <Expander IsExpanded="True" Margin="0,4,0,2">
+                                            <Expander.Header>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name, Mode=OneWay}"
+                                                               Foreground="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowTextBrushKey}}" />
+                                                    <TextBlock Margin="8,0,0,0" Text="{Binding ItemCount, Mode=OneWay, StringFormat={}{0} finding(s)}"
+                                                               Foreground="{StaticResource ScGrayTextBrush}" />
+                                                </StackPanel>
+                                            </Expander.Header>
+                                            <ItemsPresenter />
+                                        </Expander>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GroupStyle.ContainerStyle>
+                </GroupStyle>
+            </DataGrid.GroupStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding StatusText, Mode=OneWay}" Value="DiffersFromRepo">
+                            <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding StatusText, Mode=OneWay}" Value="DroppedButInRepo">
+                            <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Compare" Click="CompareMenuItem_Click" />
+                    <MenuItem Header="Open repo file" Click="OpenRepoFileMenuItem_Click" />
+                    <MenuItem Header="Script server definition into new window" Click="ScriptMenuItem_Click" />
+                    <MenuItem Header="Copy object name" Click="CopyNameMenuItem_Click" />
+                    <Separator />
+                    <MenuItem Header="Map database to project..." Click="MapMenuItem_Click" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header=" " Binding="{Binding StatusGlyph, Mode=OneWay}" Width="24" />
+                <DataGridTextColumn Header="Object" Binding="{Binding Object, Mode=OneWay}" Width="240" />
+                <DataGridTextColumn Header="Kind" Binding="{Binding Kind, Mode=OneWay}" Width="80" />
+                <DataGridTextColumn Header="Changed" Binding="{Binding ChangedText, Mode=OneWay}" Width="130" />
+                <DataGridTextColumn Header="Source" Binding="{Binding SourceDisplay, Mode=OneWay}" Width="110" />
+                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay, Mode=OneWay}" Width="150" />
+                <DataGridTextColumn Header="File" Binding="{Binding RelativePath, Mode=OneWay}" Width="200" />
+                <!-- MinWidth: at narrower widths the star column was squeezed to a sliver, and Reason is
+                     the one column that says WHY a row was not compared. Scroll sideways instead. -->
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason, Mode=OneWay}" Width="*" MinWidth="240" />
+            </DataGrid.Columns>
+        </DataGrid>
 
         <!-- Status line: always says what was checked and why anything was skipped. -->
         <TextBlock Grid.Row="2" Margin="0,6,0,0" Text="{Binding StatusText}"

@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.2** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.3** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.3 (preview)** — Check source control: the findings list now **fills the window** and follows it when you resize or dock it (it used to stop at a fixed height). Server/database groups are collapsible headers in that one list. **Right-click now acts on the row you clicked** — before, Compare and the other actions ran on whichever row had been selected earlier, which could be a different object. Status and Source read as words ("Differs from repo", "Your history") instead of internal names, and the Reason column keeps a readable width instead of being squeezed away.
 
 **0.28.2 (preview)** — Check source control shows **each server separately**. The same database on two servers (say DEV and UAT) was checked per server but displayed in one group, headed with only one server's name and with nothing to tell the rows apart. Each server now gets its own group — "AgricultureFinances (DEV)", "AgricultureFinances (UAT)" — next to each other, each compared against the same project.
 
