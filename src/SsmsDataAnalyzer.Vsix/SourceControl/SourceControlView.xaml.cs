@@ -28,6 +28,74 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             InitializeComponent();
             ViewModel = new SourceControlViewModel();
             DataContext = ViewModel;
+
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+                _intendedWidths[column] = column.Width;
+
+            FindingsGrid.SizeChanged += (s, e) => ScheduleColumnRepair();
+            FindingsGrid.Loaded += (s, e) => ScheduleColumnRepair();
+            FindingsGrid.IsVisibleChanged += (s, e) => { if ((bool)e.NewValue) ScheduleColumnRepair(); };
+            // The view model only ever changes the findings on the UI thread.
+            ((System.Collections.Specialized.INotifyCollectionChanged)ViewModel.FindingsView).CollectionChanged +=
+                (s, e) => { ThreadHelper.ThrowIfNotOnUIThread(); ScheduleColumnRepair(); };
+        }
+
+        // ---- first-open column widths ---------------------------------------------------------
+
+        private readonly System.Collections.Generic.Dictionary<DataGridColumn, DataGridLength> _intendedWidths =
+            new System.Collections.Generic.Dictionary<DataGridColumn, DataGridLength>();
+        private bool _repairScheduled;
+
+        /// <summary>
+        /// Field report: the first time the panel opens in SSMS, every column is ~20 px — WPF's
+        /// DataGrid.MinColumnWidth — and stays that way. It does not reproduce in a plain WPF
+        /// window however the grid is sized or filled (tried: tiny and zero-width starts, empty
+        /// then filled, filled while narrow), so it comes from how SSMS hosts the tool window, and
+        /// the cause cannot be observed from here.
+        ///
+        /// So this repairs the signature instead: when EVERY fixed-width column is sitting at the
+        /// minimum while the grid itself has real width, put the widths from the XAML back. Nobody
+        /// resizes all columns to 20 px by hand, and a column the user resized is left alone.
+        /// Deferred below layout priority so it runs after the pass that produced the widths.
+        /// </summary>
+        private void ScheduleColumnRepair()
+        {
+            if (_repairScheduled) return;
+            _repairScheduled = true;
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                // Yield below layout priority, so this runs after the pass that set the widths.
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                _repairScheduled = false;
+                RepairCollapsedColumns();
+            }).FileAndForget("SsmsDataAnalyzer/SourceControl/RepairColumns");
+        }
+
+        private void RepairCollapsedColumns()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (FindingsGrid.ActualWidth < 200) return; // not laid out for real yet
+
+            double floor = FindingsGrid.MinColumnWidth + 4;
+            var fixedColumns = new System.Collections.Generic.List<DataGridColumn>();
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+            {
+                if (_intendedWidths.TryGetValue(column, out var intended) && intended.IsAbsolute && intended.Value > floor * 2)
+                    fixedColumns.Add(column);
+            }
+            if (fixedColumns.Count == 0) return;
+
+            foreach (DataGridColumn column in fixedColumns)
+                if (column.ActualWidth > floor) return; // at least one is fine: not the bug
+
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+            {
+                if (!_intendedWidths.TryGetValue(column, out var intended)) continue;
+                // Resetting through a different value forces the grid to recompute it.
+                column.Width = new DataGridLength(1);
+                column.Width = intended;
+            }
         }
 
         /// <summary>Called once by SourceControlToolWindow right after construction. The check

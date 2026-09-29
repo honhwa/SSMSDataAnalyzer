@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.7** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.8** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.8 (preview)** — Check source control: the columns no longer open squashed to a few pixels the first time the panel is shown. When every column comes up at the minimum width, the panel puts the proper widths back; a column you resize yourself is left as you set it.
 
 **0.28.7 (preview)** — Check source control now checks **the database you selected in Object Explorer**, even if your last query tab is on another server. Before, SSMS's "active document" (your last query tab, e.g. on AG1LISTENER) was preferred over the selection, so clicking a database on SQLTEST7 and checking scanned the wrong server. The query window is used only when you start the check from inside it (e.g. **Ctrl+Alt+Q, C** while typing) or nothing is selected in Object Explorer. Also: a database not mapped to a project is now **one row** ("178 changed objects — map to check these") instead of one row per object.
 
