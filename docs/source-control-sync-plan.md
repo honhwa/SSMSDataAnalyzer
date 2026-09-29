@@ -456,7 +456,16 @@ or appends one; `Serialize` round-trips everything else untouched.
 | `PackageIds.CheckSourceControlCommandId` | `0x0500` |
 | `PackageGuids.SourceControlToolWindowPersistenceGuid` | `c3e8a1f4-6b2d-4e97-8a53-0f1d9b7e2c46` |
 | CanonicalName | `SsmsDataAnalyzer.CheckSourceControl` |
-| Default shortcut | `Global::Ctrl+Alt+Q, C`, added to `DefaultShortcuts` with `ShortcutSetVersion` bumped to `"2"` so existing users pick it up — the existing rules still leave any bound command or taken key alone |
+| Default shortcut | `Global::Ctrl+Alt+Q, C` — see the correction below |
+
+**Lead correction (2026-09-29): do NOT bump `ShortcutSetVersion`.** A set-version bump re-runs
+the whole default list, and a command whose default the user had *deleted* has no binding, so it
+would be given that default again — breaking the promise that a deleted default stays deleted.
+`DefaultShortcuts` changes to track **which commands have been offered**, one by one: each
+command gets exactly one chance at its default, ever, and new commands in later versions get
+theirs. Migration: the v0.25 stamp `DefaultShortcutsApplied = "1"` means the ten original
+commands have already been offered. This fix ships with this feature because this is the first
+release that adds a command to the list.
 
 ## 14. Open decisions
 
