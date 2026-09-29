@@ -358,10 +358,20 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             Groups.Clear();
 
             var visible = ShowAll ? _allFindings : _allFindings.Where(f => !f.IsMatch).ToList();
-            foreach (var byDb in visible.GroupBy(f => f.Database).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+            // One group per (server, database), never per database alone. The same database on
+            // DEV and UAT is checked separately against the same project, and grouping by name
+            // only put both environments' rows under ONE header naming just the first server,
+            // with no column to tell them apart (found while answering "can I compare server by
+            // server?"). Ordered by database, then server, so DEV and UAT of one database sit
+            // next to each other and read as a side-by-side.
+            var byServerAndDb = visible
+                .GroupBy(f => new { f.Server, f.Database })
+                .OrderBy(g => g.Key.Database, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(g => g.Key.Server, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var byDb in byServerAndDb)
             {
-                string server = byDb.Select(f => f.Server).FirstOrDefault();
-                var groupItem = new DatabaseGroupItem(byDb.Key, server);
+                var groupItem = new DatabaseGroupItem(byDb.Key.Database, byDb.Key.Server);
                 foreach (var item in byDb.OrderBy(f => f.Object, StringComparer.OrdinalIgnoreCase))
                 {
                     groupItem.Findings.Add(item);

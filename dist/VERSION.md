@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.1** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.2** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.2 (preview)** — Check source control shows **each server separately**. The same database on two servers (say DEV and UAT) was checked per server but displayed in one group, headed with only one server's name and with nothing to tell the rows apart. Each server now gets its own group — "AgricultureFinances (DEV)", "AgricultureFinances (UAT)" — next to each other, each compared against the same project.
 
 **0.28.1 (preview)** — Check source control now uses **Object Explorer's connection** too. In 0.28.0 it only reused query windows, so with every query window disconnected nothing could be checked even though Object Explorer was connected to that very server. It looks the server up by its real name (Object Explorer may display it under another name, such as "Test8 - OLTP"), and when no query window is connected the server-side scan uses the **database selected in Object Explorer**; the status line says which connection it used. Also: a large script that touched thousands of objects no longer fails the whole check (SQL Server's 2,100-parameter limit).
 
