@@ -254,6 +254,13 @@
     <Compile Update="History\QueryHistoryView.xaml.cs">
       <DependentUpon>QueryHistoryView.xaml</DependentUpon>
     </Compile>
+    <Page Update="SourceControl\SourceControlView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Update="SourceControl\SourceControlView.xaml.cs">
+      <DependentUpon>SourceControlView.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

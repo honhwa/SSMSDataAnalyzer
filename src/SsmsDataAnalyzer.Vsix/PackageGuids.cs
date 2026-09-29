@@ -59,6 +59,11 @@ namespace SsmsDataAnalyzer.Vsix
         /// QueryHistoryToolWindow's persistence GUID.</summary>
         public const string QueryHistoryToolWindowPersistenceGuidString = "5f3a1c72-8d46-4b09-a2e7-6c81d4f9b3e5";
         public static readonly Guid QueryHistoryToolWindowPersistenceGuid = new Guid(QueryHistoryToolWindowPersistenceGuidString);
+
+        /// <summary>docs/source-control-sync-plan.md §13.9 (lead-assigned, do not change) --
+        /// SourceControlToolWindow's persistence GUID.</summary>
+        public const string SourceControlToolWindowPersistenceGuidString = "c3e8a1f4-6b2d-4e97-8a53-0f1d9b7e2c46";
+        public static readonly Guid SourceControlToolWindowPersistenceGuid = new Guid(SourceControlToolWindowPersistenceGuidString);
     }
 
     /// <summary>Numeric command/menu/group IDs used inside VSCommandTable.vsct.</summary>
@@ -117,5 +122,9 @@ namespace SsmsDataAnalyzer.Vsix
         /// toolbar button; not wired into VSCommandTable.vsct in Phase 1.</summary>
         public const int QueryHistoryToolbar = 0x1060;
         public const int QueryHistoryToolbarGroup = 0x1061;
+
+        /// <summary>docs/source-control-sync-plan.md §13.9 (lead-assigned, do not change) --
+        /// "Check source control…" on the Tools menu, CanonicalName "SsmsDataAnalyzer.CheckSourceControl".</summary>
+        public const int CheckSourceControlCommandId = 0x0500;
     }
 }

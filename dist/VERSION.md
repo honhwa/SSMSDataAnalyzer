@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.27.0**
+**`SsmsDataAnalyzer.vsix` — version 0.28.0** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.0 (preview)** — New: **Check source control…** (Tools menu, or **Ctrl+Alt+Q, C**). A read-only alarm for database changes you forgot to commit: it looks at what you created, altered or dropped (from Query History) and what changed on the server you are connected to, over the last 15 days, and checks each object against the SSDT project you map that database to. It reports objects **missing from the repo**, **different from the file**, **on disk but not in the `.sqlproj`** (which SSDT silently ignores), and **dropped but still in the repo**. It never writes to the repository or to any database. Right-click a finding for **Compare** (server vs file), open the file, or script the server's version into a new query window. Also fixed: a default shortcut you deleted can no longer come back when a new version adds a shortcut.
 
 **0.27.0** — **Now requires SSMS 22.3 or newer.** A user on SSMS 22.0 reported an error when SSMS starts, so the installer no longer accepts builds below 22.3 — it refuses up front instead of installing something that misbehaves. Check yours under **Help → About**. 22.3 is the oldest build actually tested — every feature has been confirmed working on it, and on 22.10 — so the requirement sits on evidence, not caution. **If it is already installed on an older build**, this does not remove it — uninstall it under **Extensions → Manage Extensions**.
 

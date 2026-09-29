@@ -239,6 +239,24 @@
           <ToolTipText>Script the object under the caret as ALTER (CREATE when it has no ALTER form) into a new query window.</ToolTipText>
         </Strings>
       </Button>
+
+      <!--
+        docs/source-control-sync-plan.md §9 Phase 1 item 1 / §13.9 (lead-assigned id 0x0500):
+        "Check source control…" on the Tools menu, same group as cmdidAnalyzeData. Statically
+        visible for the same cold-session reason as cmdidPasteAsSqlIn/cmdidScriptObjectAsAlter
+        above; clicking loads the package on demand.
+      -->
+      <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidCheckSourceControl" priority="0x0140" type="Button">
+        <Parent guid="guidSsmsDataAnalyzerCommandSet" id="AnalyzeDataMenuGroup" />
+        <Icon guid="guidImageCatalog" id="imgSourceControl" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Check source control...</ButtonText>
+          <CanonicalName>SsmsDataAnalyzer.CheckSourceControl</CanonicalName>
+          <LocCanonicalName>SsmsDataAnalyzer.CheckSourceControl</LocCanonicalName>
+          <ToolTipText>List what you changed recently that may not be committed to the repository yet (read-only).</ToolTipText>
+        </Strings>
+      </Button>
     </Buttons>
 
   </Commands>
@@ -333,6 +351,8 @@
       <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->
       <IDSymbol name="QueryHistoryToolbar" value="0x1060" />
       <IDSymbol name="QueryHistoryToolbarGroup" value="0x1061" />
+      <!-- docs/source-control-sync-plan.md §13.9 (lead-assigned, do not change). -->
+      <IDSymbol name="cmdidCheckSourceControl" value="0x0500" />
     </GuidSymbol>
 
     <!--
@@ -367,6 +387,9 @@
     <GuidSymbol name="guidImageCatalog" value="{ae27a6b0-e345-4288-96df-5eaf394ee369}">
       <IDSymbol name="imgHistory" value="1499" />
       <IDSymbol name="imgDataTable" value="887" />
+      <!-- docs/source-control-sync-plan.md's brief: real KnownImageIds value, read from SSMS
+           22's own Microsoft.VisualStudio.ImageCatalog.dll by reflection (KnownImageIds.SourceControl = 3768). -->
+      <IDSymbol name="imgSourceControl" value="3768" />
     </GuidSymbol>
   </Symbols>
 

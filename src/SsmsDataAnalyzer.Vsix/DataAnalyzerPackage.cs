@@ -91,6 +91,9 @@ namespace SsmsDataAnalyzer.Vsix
     // (not Transient, not Float) -- a panel the user comes back to, same shape as
     // ProfileToolWindow, so VS remembers its docked position across sessions.
     [ProvideToolWindow(typeof(History.QueryHistoryToolWindow))]
+    // docs/source-control-sync-plan.md §9 Phase 1 item 2: a normal dockable, PERSISTENT tool
+    // window -- same "panel the user comes back to" shape as QueryHistoryToolWindow just above.
+    [ProvideToolWindow(typeof(SourceControl.SourceControlToolWindow))]
     [ProvideOptionPage(typeof(DataAnalyzerOptionsPage), "SSMS Data Analyzer", "General", 0, 0, true)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.NoSolution, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(Microsoft.VisualStudio.Shell.Interop.UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
@@ -119,6 +122,7 @@ namespace SsmsDataAnalyzer.Vsix
             await Pivot.PivotRowsCommand.InitializeAsync(this);
             await ResultsGrid.AggregateSelectionCommand.InitializeAsync(this);
             await History.QueryHistoryCommand.InitializeAsync(this);
+            await SourceControl.SourceControlCommand.InitializeAsync(this);
 
             // First run only, and never over an existing binding — see DefaultShortcuts.
             Commands.DefaultShortcuts.ApplyOnce(this);

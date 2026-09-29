@@ -1,0 +1,120 @@
+<UserControl x:Class="SsmsDataAnalyzer.Vsix.SourceControl.SourceControlView"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vsp="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:local="clr-namespace:SsmsDataAnalyzer.Vsix.SourceControl"
+             mc:Ignorable="d"
+             d:DesignHeight="520" d:DesignWidth="820"
+             Background="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+
+    <!--
+        docs/source-control-sync-plan.md §9 Phase 1 item 2: findings grouped by database
+        (Expander per database), Matches hidden unless "Show all" is ticked, a window filter
+        (Today/7/15/30 days, default 15), a "Check now" button (the check also runs on open;
+        see SourceControlView.xaml.cs), and a status line that always says what was checked and
+        why anything was skipped.
+
+        VS theme brushes only (project rule), same convention as QueryHistoryView. No
+        AlternatingRowBackground on any DataGrid (project rule: it beats a row-style trigger).
+    -->
+    <UserControl.Resources>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter" />
+        <SolidColorBrush x:Key="ScGrayTextBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextColorKey}}" />
+        <SolidColorBrush x:Key="ScGridLineBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextColorKey}}" Opacity="0.30" />
+        <SolidColorBrush x:Key="ScWarnRowBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemHighlightColorKey}}" Opacity="0.12" />
+
+        <Style x:Key="ScToolbarButton" TargetType="Button">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <DataTemplate x:Key="FindingsGridTemplate">
+            <DataGrid ItemsSource="{Binding Findings}" AutoGenerateColumns="False" IsReadOnly="True"
+                      HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                      SelectionUnit="FullRow" SelectionMode="Single" GridLinesVisibility="Horizontal"
+                      HorizontalGridLinesBrush="{StaticResource ScGridLineBrush}"
+                      MaxHeight="260" ScrollViewer.CanContentScroll="True"
+                      SelectedItem="{Binding DataContext.SelectedFinding, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWayToSource}"
+                      MouseDoubleClick="FindingsGrid_MouseDoubleClick">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusText}" Value="DiffersFromRepo">
+                                <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding StatusText}" Value="DroppedButInRepo">
+                                <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Compare" Click="CompareMenuItem_Click" />
+                        <MenuItem Header="Open repo file" Click="OpenRepoFileMenuItem_Click" />
+                        <MenuItem Header="Script server definition into new window" Click="ScriptMenuItem_Click" />
+                        <MenuItem Header="Copy object name" Click="CopyNameMenuItem_Click" />
+                        <Separator />
+                        <MenuItem Header="Map database to project..." Click="MapMenuItem_Click" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header=" " Binding="{Binding StatusGlyph}" Width="24" />
+                    <DataGridTextColumn Header="Object" Binding="{Binding Object}" Width="220" />
+                    <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="80" />
+                    <DataGridTextColumn Header="Changed" Binding="{Binding ChangedText}" Width="130" />
+                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="90" />
+                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="140" />
+                    <DataGridTextColumn Header="File" Binding="{Binding RelativePath}" Width="180" />
+                    <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="6">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Window filter + Show all + Check now (item 2/1). -->
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Grid.Column="0" Width="130" VerticalAlignment="Center" Margin="0,0,12,0"
+                      ItemsSource="{Binding WindowOptions}" SelectedItem="{Binding SelectedWindow}" />
+            <CheckBox Grid.Column="1" Content="Show all (including matches)" VerticalAlignment="Center"
+                      IsChecked="{Binding ShowAll}" />
+            <Button Grid.Column="3" Style="{StaticResource ScToolbarButton}" Content="Check now"
+                    Margin="0" Click="CheckNowButton_Click"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+        </Grid>
+
+        <!-- Findings grouped by database (item 2). -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Expander Header="{Binding Header}" IsExpanded="True" Margin="0,0,0,8">
+                            <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FindingsGridTemplate}" />
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Status line: always says what was checked and why anything was skipped. -->
+        <TextBlock Grid.Row="2" Margin="0,6,0,0" Text="{Binding StatusText}"
+                   Foreground="{StaticResource ScGrayTextBrush}" TextWrapping="Wrap" />
+    </Grid>
+</UserControl>
