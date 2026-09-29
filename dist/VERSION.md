@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.5** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.6** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.6 (preview)** — Check source control: choose **where it looks** — *Server + history* (default), *History* (only what you ran) or *Server* (what changed on the checked databases, by anyone). **Tables are now compared** when your history names them: column names, types, sizes, nullability and identity, against the project's `CREATE TABLE`. Differences are spelled out, e.g. *"[Code]: nvarchar(60) in repo, nvarchar(50) on server"*. Indexes and constraints are not compared, and a table found only by the server scan still says so rather than being guessed at. Also fixed: a table whose file adds constraints in separate `ALTER TABLE` blocks is no longer reported as "defined in several files".
 
 **0.28.5 (preview)** — Check source control **remembers every database you check** during the session. Before, the server scan only covered the database selected at that moment, so checking SQLTEST7 and then SQLTEST8 made SQLTEST7's results vanish (SQLTEST8's stayed only because they came from your own Query History, which is read for every server). Now each check rescans every database you have checked, and the status line lists them with what each found. **Check selected only** is a full reset: it shows **only** the selected database — the other databases are forgotten and your history on other servers is hidden — until the next **Check now** shows everything again.
 
