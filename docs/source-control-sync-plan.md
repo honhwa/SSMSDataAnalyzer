@@ -436,7 +436,7 @@ Decision order — **frozen, and each branch has a test**:
 6. No file → `MissingFromRepo`.
 7. The one file is not in the project → `OnDiskNotInProject`. **Checked before comparing**: a
    file SSDT ignores is the bigger problem, and comparing it would suggest it matters.
-8. It is a table → `NotCompared` ("tables are not compared yet — check <file> by hand").
+8. It is a table → see §13b.4 (compared by columns when your history nominated it).
 9. `Definition == null` → `NotCompared` ("definition not readable: encrypted or CLR").
 10. `AreEquivalent` → `Matches`, otherwise `DiffersFromRepo`.
 
@@ -475,6 +475,108 @@ command gets exactly one chance at its default, ever, and new commands in later 
 theirs. Migration: the v0.25 stamp `DefaultShortcutsApplied = "1"` means the ten original
 commands have already been offered. This fix ships with this feature because this is the first
 release that adds a command to the list.
+
+## 13b. Check source and table comparison (frozen by the lead, 2026-09-29)
+
+**User request (2026-09-29):** let the user choose **how** the check finds changes — *History*,
+*Server*, or *Server + history* — and compare tables for real, reasoning that the tables in your
+own history are few (the ones you actually altered), unlike the hundreds a deployment touches.
+
+### 13b.1 Check source (Vsix only)
+
+A dropdown next to the window filter: **Server + history** (default — today's behaviour),
+**History**, **Server**. It decides which candidates are gathered; nothing else changes.
+
+- *History*: only objects you created, altered or dropped (Query History). No server scan.
+- *Server*: only the `modify_date` scan of the checked databases. Your history is ignored.
+- *Server + history*: both, merged, as now.
+
+### 13b.2 Which tables are compared
+
+**A table is compared when your history nominated it** (`ChangeSource.QueryHistory` or `Both`), in
+any mode. A table nominated **only** by the server scan stays `NotCompared`, with a reason that
+says so and points at the *History* source. Rationale: a table in your history is one you changed
+on purpose, and there are few; a table whose `modify_date` moved may only have had an index or
+constraint touched by a deployment, and there can be hundreds.
+
+### 13b.3 What "compared" means for a table — columns only
+
+Compared, per column, in order: **name, type, length / precision / scale, nullability, identity,
+computed-or-not**. Not compared (the verdict says so): indexes, constraints, defaults, computed
+column expressions, collation, and every other table option. Those are real, but they are also
+exactly what deployment tooling rewrites, and comparing SSDT's formatting of them with the
+catalog is where false alarms come from. Columns are what someone forgets to commit.
+
+### 13b.4 Core API (C2)
+
+```csharp
+public sealed class TableColumn
+{
+    public TableColumn(string name, string typeName, int? length, int? precision, int? scale,
+                       bool isNullable, bool isIdentity, bool isComputed);
+    public string Name { get; }        // unbracketed
+    public string TypeName { get; }    // lower-case, unbracketed; a user type's own name; null when computed
+    public int?   Length { get; }      // characters for (n)char/(n)varchar, bytes for (var)binary; -1 = max; else null
+    public int?   Precision { get; }   // decimal/numeric only
+    public int?   Scale { get; }       // decimal/numeric scale; fractional seconds for datetime2/time/datetimeoffset
+    public bool   IsNullable { get; }
+    public bool   IsIdentity { get; }
+    public bool   IsComputed { get; }
+    public string Describe();          // "nvarchar(50) NOT NULL", "int IDENTITY NOT NULL", "computed"
+
+    /// sys.columns → the same shape the file parser produces. Owns every catalog quirk:
+    /// nchar/nvarchar max_length is BYTES (halve it), -1 is max, which types carry which facets.
+    public static TableColumn FromCatalog(string name, string typeName, short maxLength,
+        byte precision, byte scale, bool isNullable, bool isIdentity, bool isComputed);
+}
+
+public static class TableDefinitionParser
+{
+    /// Columns of the CREATE TABLE in one batch, in order. Null = not a CREATE TABLE we can read
+    /// with confidence — the table is then NotCompared, never guessed.
+    public static IReadOnlyList<TableColumn> TryParseColumns(string batchText);
+}
+
+public static class TableColumnComparer
+{
+    /// Empty = same columns. Otherwise one short, value-free line per difference, in order:
+    /// "[Amount]: decimal(18,2) NOT NULL in repo, decimal(19,4) NOT NULL on server",
+    /// "[Note] only on server", "[Old] only in repo", "column order differs".
+    public static IReadOnlyList<string> Compare(IReadOnlyList<TableColumn> repo, IReadOnlyList<TableColumn> server);
+}
+
+// ServerObjectState gains an overload; existing constructor unchanged.
+public ServerObjectState(bool exists, DbObjectKind? kind, string definition, IReadOnlyList<TableColumn> columns);
+public IReadOnlyList<TableColumn> Columns { get; }   // null = not read
+```
+
+**§13.7 step 8 becomes:** it is a table →
+
+- `server.Columns == null` → `NotCompared` ("table not compared: only tables from your history are
+  compared — use the History source, or check <file> by hand");
+- the file's batch does not parse → `NotCompared` ("could not read the CREATE TABLE in <file>");
+- `Compare` empty → `Matches` ("columns match; indexes and constraints not compared");
+- otherwise → `DiffersFromRepo`, the reason listing the differences.
+
+### 13b.5 Parser rules (each has a test)
+
+The CREATE TABLE forms SSDT writes, checked against the real repository's table files:
+
+- `[Name] NVARCHAR (50) NOT NULL` — spaces before the parenthesis, brackets, any case.
+- `IDENTITY (1, 1)`, `NULL` / `NOT NULL`; unspecified nullability is nullable, except an
+  `IDENTITY` column, which is `NOT NULL`.
+- Skipped per column, never mis-read as a type: `DEFAULT (...)`, `CONSTRAINT [x] ...`,
+  `COLLATE x`, `SPARSE`, `ROWGUIDCOL`, `FILESTREAM`, `MASKED WITH (...)`,
+  `GENERATED ALWAYS AS ROW START|END`, `HIDDEN`, `PRIMARY KEY` / `UNIQUE` inline.
+- Computed: `[X] AS (expr)` → `IsComputed`, expression ignored.
+- Table-level items are not columns: `CONSTRAINT …`, `PRIMARY KEY …`, `UNIQUE …`, `FOREIGN KEY …`,
+  `CHECK …`, `INDEX …`, `PERIOD FOR SYSTEM_TIME (…)`.
+- `max`: `NVARCHAR (MAX)` → length -1.
+- Anything else the parser does not recognise → return **null** for the whole table. A wrong
+  column list is worse than no comparison.
+
+Fixtures are **modelled on** the real files' format with invented table and column names —
+the user's schema is never copied into this repository.
 
 ## 14. Open decisions
 
