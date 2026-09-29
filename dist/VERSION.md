@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.4** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.5** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.5 (preview)** — Check source control **remembers every database you check** during the session. Before, the server scan only covered the database selected at that moment, so checking SQLTEST7 and then SQLTEST8 made SQLTEST7's results vanish (SQLTEST8's stayed only because they came from your own Query History, which is read for every server). Now each check rescans every database you have checked, and the status line lists them with what each found. **Check selected only** resets the list to just the selected database.
 
 **0.28.4 (preview)** — Check source control: **triggers are no longer falsely reported "missing from repo".** SSDT keeps a table's triggers in the table's own file, and the check only read the first object in each file — so it never saw a single trigger (0 of 22 in the Finances project) and flagged every changed one as missing. Every object in a file is now read, and each is compared against its own part of the file.
 

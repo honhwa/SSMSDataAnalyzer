@@ -53,9 +53,19 @@
                       ItemsSource="{Binding WindowOptions}" SelectedItem="{Binding SelectedWindow}" />
             <CheckBox Grid.Column="1" Content="Show all (including matches)" VerticalAlignment="Center"
                       IsChecked="{Binding ShowAll}" />
-            <Button Grid.Column="3" Style="{StaticResource ScToolbarButton}" Content="Check now"
-                    Margin="0" Click="CheckNowButton_Click"
-                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <!-- Each database you check is remembered and rescanned on every check, so moving the
+                     Object Explorer selection never drops a server you just looked at. This resets
+                     that list to the selected database alone. -->
+                <Button Style="{StaticResource ScToolbarButton}" Content="Check selected only"
+                        ToolTip="Forget the other databases checked this session and scan only the selected one"
+                        Click="CheckSelectedOnlyButton_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+                <Button Style="{StaticResource ScToolbarButton}" Content="Check now"
+                        ToolTip="Scan the selected database, plus every database already checked this session"
+                        Margin="0" Click="CheckNowButton_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+            </StackPanel>
         </Grid>
 
         <!--

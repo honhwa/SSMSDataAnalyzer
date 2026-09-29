@@ -97,6 +97,33 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         public AsyncPackage Package { get; set; }
 
         private List<FindingItem> _allFindings = new List<FindingItem>();
+
+        /// <summary>
+        /// Every (server, database) the server-side scan has been pointed at this session.
+        ///
+        /// Field report: select AgricultureFinances on SQLTEST7 and check, then select it on
+        /// SQLTEST8 and check — SQLTEST7's group vanished, while SQLTEST8's never did. SQLTEST8's
+        /// rows came from the user's own Query History, which is read for every server on every
+        /// check; SQLTEST7's came from the modify_date scan, which only covered the database
+        /// selected at that moment. Moving the selection silently dropped a server the user had
+        /// just checked. Now each database you check joins this list and every check rescans
+        /// all of them, so results only ever grow while you move around; "Check selected only"
+        /// resets it. Session-only: connections are too.
+        /// </summary>
+        private readonly List<(string Server, string Database)> _scannedScopes = new List<(string Server, string Database)>();
+
+        private bool _checkSelectedOnly;
+
+        /// <summary>"Check selected only": forget the other databases, scan just the selected one.</summary>
+        public Task RunCheckSelectedOnlyAsync()
+        {
+            _checkSelectedOnly = true;
+            return RunCheckAsync();
+        }
+
+        private static bool SameScope((string Server, string Database) scope, string server, string database) =>
+            string.Equals(scope.Server, server, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(scope.Database, database, StringComparison.OrdinalIgnoreCase);
         private bool _disposed;
 
         public SourceControlViewModel()
@@ -168,28 +195,48 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 List<ChangeCandidate> historyCandidates = await Task.Run(async () =>
                     await BuildHistoryCandidatesAsync(cutoffUtc).ConfigureAwait(false)).ConfigureAwait(true);
 
-                // 3. sys.objects.modify_date on the CURRENT window's database only (§9 item 2b).
-                List<ChangeCandidate> serverCandidates = new List<ChangeCandidate>();
-                string modifyDateSkipReason = null;
-                if (currentConnStr != null)
+                // 3. sys.objects.modify_date on EVERY database checked this session (see
+                //    _scannedScopes), the current one included.
+                if (_checkSelectedOnly) _scannedScopes.Clear();
+                _checkSelectedOnly = false;
+                if (!string.IsNullOrEmpty(currentServer) && !string.IsNullOrEmpty(currentDatabase)
+                    && !_scannedScopes.Any(sc => SameScope(sc, currentServer, currentDatabase)))
                 {
+                    _scannedScopes.Add((currentServer, currentDatabase));
+                }
+
+                List<ChangeCandidate> serverCandidates = new List<ChangeCandidate>();
+                var scanNotes = new List<string>();
+                foreach (var scope in _scannedScopes.ToList())
+                {
+                    // The selected database uses the connection already found for it; any other
+                    // remembered one goes through the same lookup as the actions (current window,
+                    // an open window on that server, then Object Explorer).
+                    string scopeConnStr = SameScope(scope, currentServer, currentDatabase) && currentConnStr != null
+                        ? currentConnStr
+                        : await ResolveConnectionStringAsync(dte, scope.Server, scope.Database).ConfigureAwait(true);
+
+                    string label = scope.Database + " on " + scope.Server;
+                    if (scopeConnStr == null)
+                    {
+                        scanNotes.Add(label + ": no connection");
+                        continue;
+                    }
+
                     try
                     {
-                        var recent = await ServerObjectReader.ReadRecentlyModifiedAsync(currentConnStr, cutoffUtc).ConfigureAwait(true);
+                        var recent = await ServerObjectReader.ReadRecentlyModifiedAsync(scopeConnStr, cutoffUtc).ConfigureAwait(true);
                         foreach (var (module, changedUtc) in recent)
                         {
-                            serverCandidates.Add(new ChangeCandidate(currentServer, currentDatabase, module, changedUtc, ChangeSource.ServerModifyDate, null));
+                            serverCandidates.Add(new ChangeCandidate(scope.Server, scope.Database, module, changedUtc, ChangeSource.ServerModifyDate, null));
                         }
+                        scanNotes.Add(label + ": " + recent.Count);
                     }
                     catch (Exception ex)
                     {
-                        modifyDateSkipReason = ex.GetType().Name;
+                        scanNotes.Add(label + ": failed (" + ex.GetType().Name + ")");
                         ObjectExplorer.OeDiagnostics.Warn("Source control check: reading sys.objects.modify_date failed (" + ex.GetType().Name + ").");
                     }
-                }
-                else
-                {
-                    modifyDateSkipReason = "no connected query window, and no database selected in Object Explorer";
                 }
 
                 IReadOnlyList<ChangeCandidate> merged = ChangeCandidates.Merge(historyCandidates, serverCandidates);
@@ -310,13 +357,13 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 var summary = new List<string>
                 {
                     historyCandidates.Count + " candidate(s) from query history",
-                    serverCandidates.Count + " from server modify_date"
-                        + (modifyDateSkipReason != null
-                            ? " (skipped: " + modifyDateSkipReason + ")"
-                            // Say where the scan's connection came from: without it, "why did it
-                            // work this time" has no answer on screen. Database name only — the
-                            // user's own, shown to them, never logged.
-                            : " (" + currentDatabase + ", via " + scopeSource + ")"),
+                    // Every database scanned, and what each gave, so "why did that group vanish"
+                    // always has an answer on screen. Names are the user's own, shown to them,
+                    // never logged.
+                    scanNotes.Count == 0
+                        ? "server scan skipped: no connected query window and no database selected in Object Explorer"
+                        : "server scan" + (scopeSource != null ? " (" + scopeSource + " + earlier checks)" : " (earlier checks)")
+                            + ": " + string.Join(", ", scanNotes),
                     databasesChecked + " database(s) checked against a server",
                 };
                 if (databasesUnmapped > 0) summary.Add(databasesUnmapped + " database(s) not mapped to a project");

@@ -52,6 +52,13 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 .FileAndForget("SsmsDataAnalyzer/SourceControl/CheckNow");
         }
 
+        private void CheckSelectedOnlyButton_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckSelectedOnlyAsync())
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/CheckSelectedOnly");
+        }
+
         private FindingItem SelectedRow(object sender)
         {
             var grid = sender as FrameworkElement;
