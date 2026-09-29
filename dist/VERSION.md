@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.3** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.28.4** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.4 (preview)** — Check source control: **triggers are no longer falsely reported "missing from repo".** SSDT keeps a table's triggers in the table's own file, and the check only read the first object in each file — so it never saw a single trigger (0 of 22 in the Finances project) and flagged every changed one as missing. Every object in a file is now read, and each is compared against its own part of the file.
 
 **0.28.3 (preview)** — Check source control: the findings list now **fills the window** and follows it when you resize or dock it (it used to stop at a fixed height). Server/database groups are collapsible headers in that one list. **Right-click now acts on the row you clicked** — before, Compare and the other actions ran on whichever row had been selected earlier, which could be a different object. Status and Source read as words ("Differs from repo", "Your history") instead of internal names, and the Reason column keeps a readable width instead of being squeezed away.
 

@@ -298,6 +298,15 @@ public static class ModuleFileParser
 The target of the **first** `CREATE`/`ALTER` of a §13.2 kind in the file. Must handle a leading
 BOM, an author header comment, `SET` lines before `CREATE`, and bracketed names containing dots.
 
+**Lead amendment (2026-09-29, field report): a file can define several objects.**
+`ModuleFileParser.IdentifyAll(fileText)` returns every object in the file, one per `GO` batch,
+each with its **own batch text**, and `RepoIndex` indexes all of them. SSDT keeps DML triggers in
+their table's file (`DebtLedger\Tables\Debt.sql` = table, indexes, two triggers). Measured on the
+real Finances project: the first-object-only rule found **0 of its 22 triggers**, so every changed
+trigger was reported "missing from repo"; procedures, functions and views were unaffected
+(737 / 58 / 27 either way). Each object compares against its own batch, so a trigger is never
+compared with its whole table file. `TryIdentify` keeps its meaning (the first object).
+
 ### 13.4 What the project includes — `SqlProjectReader`
 
 ```csharp

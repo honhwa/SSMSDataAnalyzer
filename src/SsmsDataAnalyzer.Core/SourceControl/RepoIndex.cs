@@ -66,22 +66,27 @@ namespace SsmsDataAnalyzer.Core.SourceControl
                     if (f == null) continue;
                     fileCount++;
 
-                    ModuleRef module = ModuleFileParser.TryIdentify(f.Text);
-                    if (module == null)
+                    // Every object in the file, each with its own batch text — a table file
+                    // also defines that table's triggers (see ModuleFileParser.IdentifyAll).
+                    var defined = ModuleFileParser.IdentifyAll(f.Text);
+                    if (defined.Count == 0)
                     {
                         unrecognised++;
                         continue;
                     }
 
                     bool inProject = project != null && project.Contains(f.RelativePath);
-                    var entry = new RepoEntry(f.RelativePath, f.Text, module, inProject);
-
-                    if (!byModule.TryGetValue(module, out List<RepoEntry> list))
+                    foreach (var (module, batchText) in defined)
                     {
-                        list = new List<RepoEntry>();
-                        byModule[module] = list;
+                        var entry = new RepoEntry(f.RelativePath, batchText, module, inProject);
+
+                        if (!byModule.TryGetValue(module, out List<RepoEntry> list))
+                        {
+                            list = new List<RepoEntry>();
+                            byModule[module] = list;
+                        }
+                        list.Add(entry);
                     }
-                    list.Add(entry);
                 }
             }
 
