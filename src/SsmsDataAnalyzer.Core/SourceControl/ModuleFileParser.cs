@@ -13,8 +13,13 @@ namespace SsmsDataAnalyzer.Core.SourceControl
     public static class ModuleFileParser
     {
         /// <summary>null = defines nothing we recognise.</summary>
-        public static ModuleRef TryIdentify(string fileText)
+        public static ModuleRef TryIdentify(string fileText) => Identify(fileText, out _);
+
+        /// <summary>The first CREATE/ALTER target, and whether it was a CREATE (CREATE OR ALTER
+        /// counts as a CREATE: it defines the object whole).</summary>
+        private static ModuleRef Identify(string fileText, out bool isCreate)
         {
+            isCreate = false;
             if (string.IsNullOrEmpty(fileText)) return null;
 
             List<TsqlToken> sig = DdlScanning.Significant(fileText);
@@ -30,7 +35,7 @@ namespace SsmsDataAnalyzer.Core.SourceControl
                     if (IsWord(fileText, sig, j, "OR") && IsWord(fileText, sig, j + 1, "ALTER")) j += 2;
 
                     ModuleRef target = TryConsumeTarget(fileText, sig, j);
-                    if (target != null) return target;
+                    if (target != null) { isCreate = true; return target; }
                     i++;
                 }
                 else if (DdlScanning.EqualsKeyword(word, "ALTER"))
@@ -61,15 +66,15 @@ namespace SsmsDataAnalyzer.Core.SourceControl
         /// repeat count or a line comment). The lexer has already classified strings and
         /// comments, so a <c>GO</c> inside either can never split a batch.
         /// </summary>
-        public static IReadOnlyList<(ModuleRef Module, string Text)> IdentifyAll(string fileText)
+        public static IReadOnlyList<(ModuleRef Module, string Text, bool IsCreate)> IdentifyAll(string fileText)
         {
-            var result = new List<(ModuleRef, string)>();
+            var result = new List<(ModuleRef, string, bool)>();
             if (string.IsNullOrEmpty(fileText)) return result;
 
             foreach (string batch in SplitBatches(fileText))
             {
-                ModuleRef module = TryIdentify(batch);
-                if (module != null) result.Add((module, batch));
+                ModuleRef module = Identify(batch, out bool isCreate);
+                if (module != null) result.Add((module, batch, isCreate));
             }
             return result;
         }

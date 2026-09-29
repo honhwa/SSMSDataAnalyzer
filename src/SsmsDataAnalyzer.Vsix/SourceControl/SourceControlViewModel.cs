@@ -23,6 +23,18 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
         public override string ToString() => Text;
     }
 
+    /// <summary>Where the check looks for changes (plan §13b.1).</summary>
+    internal enum CheckSourceMode { ServerAndHistory, History, Server }
+
+    /// <summary>One entry of the check-source dropdown (plan §13b.1).</summary>
+    internal sealed class CheckSourceOption
+    {
+        public string Text { get; }
+        public CheckSourceMode Mode { get; }
+        public CheckSourceOption(string text, CheckSourceMode mode) { Text = text; Mode = mode; }
+        public override string ToString() => Text;
+    }
+
     /// <summary>
     /// Backs SourceControlView: runs the read-only check (docs/source-control-sync-plan.md §9
     /// Phase 1) and exposes the row actions. Orchestration only -- the actual candidate/verdict
@@ -40,6 +52,22 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             new WindowOption("Last 15 days", 15),
             new WindowOption("Last 30 days", 30),
         };
+
+        /// <summary>User request (2026-09-29): choose how changes are found. Server + history is
+        /// the default because it is what the check did before the choice existed.</summary>
+        public CheckSourceOption[] SourceOptions { get; } =
+        {
+            new CheckSourceOption("Server + history", CheckSourceMode.ServerAndHistory),
+            new CheckSourceOption("History", CheckSourceMode.History),
+            new CheckSourceOption("Server", CheckSourceMode.Server),
+        };
+
+        private CheckSourceOption _selectedSource;
+        public CheckSourceOption SelectedSource
+        {
+            get => _selectedSource;
+            set { if (ReferenceEquals(_selectedSource, value)) return; _selectedSource = value; OnPropertyChanged(); }
+        }
 
         private WindowOption _selectedWindow;
         public WindowOption SelectedWindow
@@ -134,6 +162,7 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             FindingsView.SortDescriptions.Add(new SortDescription(nameof(FindingItem.Object), ListSortDirection.Ascending));
 
             _selectedWindow = WindowOptions[2]; // Last 15 days -- the default (§9 Phase 1 item 2).
+            _selectedSource = SourceOptions[0]; // Server + history -- the default (§13b.1).
         }
 
         // ---- the check itself ----------------------------------------------------------------
@@ -192,8 +221,12 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                 DateTime cutoffUtc = DateTime.UtcNow.AddDays(-windowDays);
 
                 // 2. Query history + DDL scan (background: disk I/O + lexing).
-                List<ChangeCandidate> historyCandidates = await Task.Run(async () =>
-                    await BuildHistoryCandidatesAsync(cutoffUtc).ConfigureAwait(false)).ConfigureAwait(true);
+                CheckSourceMode mode = SelectedSource?.Mode ?? CheckSourceMode.ServerAndHistory;
+
+                List<ChangeCandidate> historyCandidates = mode == CheckSourceMode.Server
+                    ? new List<ChangeCandidate>()
+                    : await Task.Run(async () =>
+                        await BuildHistoryCandidatesAsync(cutoffUtc).ConfigureAwait(false)).ConfigureAwait(true);
 
                 // 3. sys.objects.modify_date on EVERY database checked this session (see
                 //    _scannedScopes), the current one included.
@@ -208,7 +241,7 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
                 List<ChangeCandidate> serverCandidates = new List<ChangeCandidate>();
                 var scanNotes = new List<string>();
-                foreach (var scope in _scannedScopes.ToList())
+                foreach (var scope in mode == CheckSourceMode.History ? new List<(string Server, string Database)>() : _scannedScopes.ToList())
                 {
                     // The selected database uses the connection already found for it; any other
                     // remembered one goes through the same lookup as the actions (current window,
@@ -343,6 +376,29 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
                             if (qualified.Count > 0)
                             {
                                 states = await ServerObjectReader.ReadStatesAsync(connStr, database, qualified).ConfigureAwait(true);
+
+                                // Plan 13b.2: a table YOUR history names is compared by its
+                                // columns. One found only by the server scan is not — its
+                                // modify_date may only mean a deployment touched an index — and
+                                // SyncChecker says so, pointing at the History source.
+                                var historyTables = candidates
+                                    .Where(c => c.Module?.Schema != null
+                                             && (c.Source == ChangeSource.QueryHistory || c.Source == ChangeSource.Both)
+                                             && states.TryGetValue(c.Module, out var st) && st.Exists && st.Kind == DbObjectKind.Table)
+                                    .Select(c => c.Module).Distinct().ToList();
+
+                                if (historyTables.Count > 0)
+                                {
+                                    var catalog = await ServerObjectReader.ReadTableColumnsAsync(connStr, database, historyTables).ConfigureAwait(true);
+                                    foreach (ModuleRef table in historyTables)
+                                    {
+                                        if (!catalog.TryGetValue(table, out var raw)) continue;
+                                        var columns = raw.Select(c => TableColumn.FromCatalog(c.Name, c.TypeName, c.MaxLength,
+                                            c.Precision, c.Scale, c.IsNullable, c.IsIdentity, c.IsComputed)).ToList();
+                                        ServerObjectState known = states[table];
+                                        states[table] = new ServerObjectState(known.Exists, known.Kind, known.Definition, columns);
+                                    }
+                                }
                             }
                             databasesChecked++;
                         }
@@ -370,11 +426,16 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
 
                 var summary = new List<string>
                 {
-                    historyCandidates.Count + " candidate(s) from query history",
+                    "source: " + (SelectedSource?.Text ?? "Server + history"),
+                    mode == CheckSourceMode.Server
+                        ? "history not used (Server source)"
+                        : historyCandidates.Count + " candidate(s) from query history",
                     // Every database scanned, and what each gave, so "why did that group vanish"
                     // always has an answer on screen. Names are the user's own, shown to them,
                     // never logged.
-                    scanNotes.Count == 0
+                    mode == CheckSourceMode.History
+                        ? "server scan not used (History source)"
+                    : scanNotes.Count == 0
                         ? "server scan skipped: no connected query window and no database selected in Object Explorer"
                         : "server scan" + (scopeSource != null ? " (" + scopeSource + " + earlier checks)" : " (earlier checks)")
                             + ": " + string.Join(", ", scanNotes),

@@ -116,7 +116,7 @@ namespace SsmsDataAnalyzer.Tests.SourceControl
             SyncFinding f = SyncChecker.Check(Candidate(tableModule),
                 new ServerObjectState(true, DbObjectKind.Table, null), repo);
             Assert.Equal(SyncStatus.NotCompared, f.Status);
-            Assert.Contains("tables are not compared", f.Reason);
+            Assert.Contains("table not compared", f.Reason);
         }
 
         [Fact]

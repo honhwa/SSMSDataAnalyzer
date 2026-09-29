@@ -55,7 +55,15 @@ namespace SsmsDataAnalyzer.Core.SourceControl
 
         public static RepoIndex Build(IEnumerable<RepoFile> files, SqlProjectFiles project)
         {
+            // Only a CREATE defines an object. SSDT writes constraints as separate
+            // "ALTER TABLE x ADD CONSTRAINT" batches in the table's own file, and a repository may
+            // keep foreign keys in files of their own; counting each of those as another
+            // definition made the table look "defined in N files" and gave the column
+            // comparison an ALTER batch instead of the CREATE TABLE (found by C2, measured on the
+            // real repository). An ALTER counts only for an object nothing in the repository
+            // creates — a repository that keeps procedures as ALTER scripts still works.
             var byModule = new Dictionary<ModuleRef, List<RepoEntry>>(ModuleRefComparer.Instance);
+            var alteredOnly = new Dictionary<ModuleRef, List<RepoEntry>>(ModuleRefComparer.Instance);
             int fileCount = 0;
             int unrecognised = 0;
 
@@ -76,18 +84,24 @@ namespace SsmsDataAnalyzer.Core.SourceControl
                     }
 
                     bool inProject = project != null && project.Contains(f.RelativePath);
-                    foreach (var (module, batchText) in defined)
+                    foreach (var (module, batchText, isCreate) in defined)
                     {
                         var entry = new RepoEntry(f.RelativePath, batchText, module, inProject);
+                        var target = isCreate ? byModule : alteredOnly;
 
-                        if (!byModule.TryGetValue(module, out List<RepoEntry> list))
+                        if (!target.TryGetValue(module, out List<RepoEntry> list))
                         {
                             list = new List<RepoEntry>();
-                            byModule[module] = list;
+                            target[module] = list;
                         }
                         list.Add(entry);
                     }
                 }
+            }
+
+            foreach (var pair in alteredOnly)
+            {
+                if (!byModule.ContainsKey(pair.Key)) byModule[pair.Key] = pair.Value;
             }
 
             return new RepoIndex(byModule, fileCount, unrecognised);

@@ -121,6 +121,84 @@ namespace SsmsDataAnalyzer.Vsix.SourceControl
             return all;
         }
 
+        /// <summary>One column as sys.columns describes it, before Core's TableColumn.FromCatalog
+        /// turns it into the shape the file parser produces.</summary>
+        internal struct CatalogColumn
+        {
+            public string Name;
+            public string TypeName;
+            public short MaxLength;
+            public byte Precision;
+            public byte Scale;
+            public bool IsNullable;
+            public bool IsIdentity;
+            public bool IsComputed;
+        }
+
+        /// <summary>
+        /// Plan §13b: the columns of each table, in column order, one result set per table,
+        /// batched in chunks like the other reads. A table that does not exist yields no entry.
+        ///
+        /// The type name comes from a join with that database's OWN sys.types, not TYPE_NAME():
+        /// TYPE_NAME resolves in the connection's current database, which would misname a
+        /// user-defined type the moment the two differ.
+        /// </summary>
+        public static async Task<Dictionary<ModuleRef, List<CatalogColumn>>> ReadTableColumnsAsync(
+            string connectionString, string database, IReadOnlyList<ModuleRef> tables)
+        {
+            var all = new Dictionary<ModuleRef, List<CatalogColumn>>();
+            foreach (var chunk in Chunks(tables))
+            {
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    await connection.OpenAsync().ConfigureAwait(false);
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandTimeout = 30;
+                        string db = SqlIdentifier.Bracket(database);
+                        var sql = new System.Text.StringBuilder();
+                        for (int i = 0; i < chunk.Count; i++)
+                        {
+                            string p = "@t" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            sql.Append("SELECT c.name, t.name, c.max_length, c.precision, c.scale, c.is_nullable, c.is_identity, c.is_computed FROM ")
+                               .Append(db).Append(".sys.columns c JOIN ")
+                               .Append(db).Append(".sys.types t ON t.user_type_id = c.user_type_id WHERE c.object_id = OBJECT_ID(")
+                               .Append(p).Append(") ORDER BY c.column_id;" + "\n");
+                            command.Parameters.AddWithValue(p, db + "." + chunk[i].ToString());
+                        }
+                        command.CommandText = sql.ToString();
+
+                        using (var reader = await command.ExecuteReaderAsync().ConfigureAwait(false))
+                        {
+                            int idx = 0;
+                            do
+                            {
+                                var columns = new List<CatalogColumn>();
+                                while (await reader.ReadAsync().ConfigureAwait(false))
+                                {
+                                    columns.Add(new CatalogColumn
+                                    {
+                                        Name = reader.GetString(0),
+                                        TypeName = reader.GetString(1),
+                                        MaxLength = reader.GetInt16(2),
+                                        Precision = reader.GetByte(3),
+                                        Scale = reader.GetByte(4),
+                                        IsNullable = reader.GetBoolean(5),
+                                        IsIdentity = reader.GetBoolean(6),
+                                        IsComputed = reader.GetBoolean(7),
+                                    });
+                                }
+                                if (idx < chunk.Count && columns.Count > 0) all[chunk[idx]] = columns;
+                                idx++;
+                            }
+                            while (await reader.NextResultAsync().ConfigureAwait(false));
+                        }
+                    }
+                }
+            }
+            return all;
+        }
+
         /// <summary>
         /// Both batched reads send one parameter per object, and SQL Server rejects a request
         /// with more than 2,100 parameters. Field report: a single executed deployment script

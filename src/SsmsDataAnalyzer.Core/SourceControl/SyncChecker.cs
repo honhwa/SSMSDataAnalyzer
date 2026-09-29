@@ -126,11 +126,22 @@ namespace SsmsDataAnalyzer.Core.SourceControl
             Definition = definition;
         }
 
+        /// <summary>A table read with its columns (§13b.4). <paramref name="columns"/> null = the
+        /// columns were not read (the table was not nominated by history).</summary>
+        public ServerObjectState(bool exists, DbObjectKind? kind, string definition, IReadOnlyList<TableColumn> columns)
+            : this(exists, kind, definition)
+        {
+            Columns = columns;
+        }
+
         public bool Exists { get; }
         public DbObjectKind? Kind { get; }
 
         /// <summary>null = table, encrypted, CLR, or unreadable.</summary>
         public string Definition { get; }
+
+        /// <summary>null = columns not read.</summary>
+        public IReadOnlyList<TableColumn> Columns { get; }
     }
 
     public sealed class SyncFinding
@@ -216,10 +227,27 @@ namespace SsmsDataAnalyzer.Core.SourceControl
 
             DbObjectKind effectiveKind = server.Kind ?? candidate.Module.Kind;
 
-            // 8. Tables are not compared in Phase 1.
+            // 8. Tables: columns only (§13b.3).
             if (effectiveKind == DbObjectKind.Table)
-                return new SyncFinding(candidate, SyncStatus.NotCompared, entry.RelativePath,
-                    "tables are not compared yet -- check " + entry.RelativePath + " by hand");
+            {
+                if (server.Columns == null)
+                    return new SyncFinding(candidate, SyncStatus.NotCompared, entry.RelativePath,
+                        "table not compared: only tables from your history are compared -- use the History source, or check "
+                        + entry.RelativePath + " by hand");
+
+                IReadOnlyList<TableColumn> repoColumns = TableDefinitionParser.TryParseColumns(entry.Text);
+                if (repoColumns == null)
+                    return new SyncFinding(candidate, SyncStatus.NotCompared, entry.RelativePath,
+                        "could not read the CREATE TABLE in " + entry.RelativePath);
+
+                IReadOnlyList<string> differences = TableColumnComparer.Compare(repoColumns, server.Columns);
+                if (differences.Count == 0)
+                    return new SyncFinding(candidate, SyncStatus.Matches, entry.RelativePath,
+                        "columns match; indexes and constraints not compared");
+
+                return new SyncFinding(candidate, SyncStatus.DiffersFromRepo, entry.RelativePath,
+                    candidate.Module + " differs from " + entry.RelativePath + ": " + string.Join("; ", differences));
+            }
 
             // 9. Encrypted / CLR / otherwise unreadable definition.
             if (server.Definition == null)

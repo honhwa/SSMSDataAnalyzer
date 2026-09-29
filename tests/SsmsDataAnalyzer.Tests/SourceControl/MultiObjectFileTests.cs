@@ -150,5 +150,47 @@ namespace SsmsDataAnalyzer.Tests.SourceControl
             Assert.Equal("ABB.ChangeStatus", all[0].Module.Name);
             Assert.Equal(ModuleFileParser.TryIdentify(text), all[0].Module);
         }
+    
+        [Fact]
+        public void AlterTableInTheSameFile_IsNotASecondDefinition()
+        {
+            string text =
+                "CREATE TABLE [s].[T] ([A] INT NOT NULL);\r\nGO\r\n" +
+                "ALTER TABLE [s].[T] ADD CONSTRAINT [PK_T] PRIMARY KEY ([A]);\r\nGO\r\n";
+            var repo = RepoIndex.Build(new[] { new RepoFile(@"s\Tables\T.sql", text) },
+                SqlProjectReader.Read("<Project/>"));
+
+            var found = repo.Find(new ModuleRef("s", "T", DbObjectKind.Table));
+
+            Assert.Single(found);
+            Assert.StartsWith("CREATE TABLE", found[0].Text.TrimStart());
+        }
+
+        [Fact]
+        public void ForeignKeyFileElsewhere_DoesNotMakeTheTableADuplicate()
+        {
+            var files = new[]
+            {
+                new RepoFile(@"s\Tables\T.sql", "CREATE TABLE [s].[T] ([A] INT NOT NULL);"),
+                new RepoFile(@"s\Tables\Keys\FK_T.sql", "ALTER TABLE [s].[T] ADD CONSTRAINT [FK_T] FOREIGN KEY ([A]) REFERENCES [s].[U]([A]);"),
+            };
+            var repo = RepoIndex.Build(files, SqlProjectReader.Read("<Project/>"));
+
+            var found = repo.Find(new ModuleRef("s", "T", DbObjectKind.Table));
+
+            Assert.Single(found);
+            Assert.Equal(@"s\Tables\T.sql", found[0].RelativePath);
+        }
+
+        [Fact]
+        public void AnObjectOnlyEverAltered_IsStillIndexed()
+        {
+            // Some repositories keep procedures as ALTER scripts; nothing creates them.
+            var repo = RepoIndex.Build(
+                new[] { new RepoFile(@"dbo\P.sql", "ALTER PROCEDURE [dbo].[P] AS SELECT 1") },
+                SqlProjectReader.Read("<Project/>"));
+
+            Assert.Single(repo.Find(new ModuleRef("dbo", "P", DbObjectKind.Procedure)));
+        }
     }
 }
