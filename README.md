@@ -15,7 +15,7 @@ Useful if you need to answer questions like:
 - *What was that query I ran an hour ago, in the tab I've since closed?*
 
 It also adds a few things SSMS itself doesn't have: a searchable history of the queries you have
-run, searching query results, peeking at a linked record, comparing rows side by side, adding up
+run, a check for database changes you forgot to commit to your SSDT project, searching query results, peeking at a linked record, comparing rows side by side, adding up
 a selection, turning a list of values into a SQL `IN (...)` clause, and scripting the object
 under your cursor with **F12** or **Ctrl+click**.
 
@@ -33,6 +33,7 @@ under your cursor with **F12** or **Ctrl+click**.
 | **Paste a list as `IN (...)`** | In a query window, right-click → **Paste as SQL IN (...)** |
 | **Script an object** — ALTER into a new window, or peek at its CREATE | In a query window, cursor on a table/view/procedure name → **F12**, or **Ctrl+click** the name |
 | **See what you ran earlier** — searchable history of every query you execute | **Tools → Query History…** |
+| **Catch changes you forgot to commit** — database vs your SSDT project | **Tools → Check source control…** |
 | **Settings** | **Tools → Options… → SSMS Data Analyzer** |
 | **Keyboard shortcuts** | **Ctrl+Alt+Q** then a letter — see [Keyboard shortcuts](#keyboard-shortcuts) |
 
@@ -506,6 +507,72 @@ If you'd rather not record something in the first place:
 
 ---
 
+## Feature 9 — Check source control
+
+*"I changed a procedure in SSMS last week — did it ever make it into the project?"* If your
+databases live in SSDT projects (`.sqlproj`) under source control, this lists the objects that
+changed on the server and tells you, for each one, whether the project has it.
+
+**Where:** select a database in Object Explorer (or be in a query window connected to it), then
+**Tools → Check source control…** (**Ctrl+Alt+Q, C**).
+
+**It only reads.** It never writes to your project, never commits, and never changes a database.
+
+### First time: map the database to its project
+
+A database and its project rarely share a name (`AgricultureFinances` is built from
+`KingICT.Database.Finances.sqlproj`), so you say which is which once: right-click any row of an
+unmapped database → **Map database to project…** and pick the `.sqlproj`. The mapping is by
+**database name**, so the same database on DEV, UAT or TEST uses the same project with no extra
+setup.
+
+### What it looks at
+
+Choose with the dropdown next to the date range (**Last 15 days** by default):
+
+| Source | Finds |
+|---|---|
+| **Server + history** (default) | Both of the below |
+| **History** | Objects **you** created, altered or dropped — from [Query History](#feature-8--query-history) |
+| **Server** | Objects whose modified date moved on the checked databases — changed **by anyone**, with any tool |
+
+Every database you check is remembered and rescanned on each check, so moving around Object
+Explorer never drops a server you just looked at. **Check selected only** resets that to the
+selected database. The status line always lists what was scanned and why anything was skipped.
+
+### What it tells you
+
+| Status | Meaning |
+|---|---|
+| **Missing from repo** | No file in the project defines this object — the classic "forgot to commit" |
+| **Differs from repo** | The file exists, but the server holds something else. Right-click → **Compare** |
+| **Not in .sqlproj** | A file defines it, but the project doesn't list that file — SSDT silently ignores it |
+| **Dropped, still in repo** | You dropped it on the server; the file is still in the project |
+| **Not compared** | Changed, but it couldn't be checked — the Reason column says why |
+
+Findings are grouped per server and database, so DEV and UAT sit side by side. Matches are
+hidden unless you tick **Show all**. Right-click a row for **Compare** (server vs file, in SSMS's
+diff viewer), **Open repo file**, **Script server definition into new window** (never run) and
+**Copy object name**.
+
+### Good to know
+
+- **Formatting is ignored.** Whitespace, comments, line endings and `CREATE` vs `ALTER` never
+  count as a difference; a changed string literal does.
+- **Triggers** kept inside their table's file, as SSDT does it, are found and compared on their own.
+- **Tables** are compared by their **columns** — names, types, sizes, nullability, identity —
+  when your history names them. Indexes and constraints are not compared. A table found only
+  by the server scan says so rather than guessing, because a deployment can move its modified
+  date without changing a column.
+- **Connections:** it reuses the query window or Object Explorer connection you already have.
+  It never stores or asks for a password; a server with no connection is listed as not compared.
+- **Query shortcuts** (Ctrl+3, Alt+F1) aren't in Query History, so changes made through them are
+  only found by the **Server** source.
+- The mapping is kept in `%LOCALAPPDATA%\SsmsDataAnalyzer\SourceControlMap.txt`, one line per
+  database, and can be edited by hand.
+
+---
+
 ## Keyboard shortcuts
 
 Everything has a shortcut out of the box. They all start with the same chord — hold
@@ -523,6 +590,7 @@ Everything has a shortcut out of the box. They all start with the same chord —
 | **Ctrl+Alt+Q**, then **I** | **Paste as SQL IN (...)** |
 | **Ctrl+Alt+Q**, then **N** | **Paste as numeric SQL IN (...)** |
 | **Ctrl+Alt+Q**, then **S** | **Script object as ALTER** (same as F12) |
+| **Ctrl+Alt+Q**, then **C** | **Check source control…** |
 | **F12** | **Script object as ALTER**, in query windows only |
 
 You don't have to memorise the letters: press **Ctrl+Alt+Q** and SSMS lists what can follow it.
@@ -570,6 +638,7 @@ SSMS warns you if the key is already used, which is the check this extension can
 | Paste as SQL IN (...) | `SsmsDataAnalyzer.PasteAsSqlIn` |
 | Paste as numeric SQL IN (...) | `SsmsDataAnalyzer.PasteAsNumericSqlIn` |
 | Script object as ALTER | `SsmsDataAnalyzer.ScriptObjectAsAlter` — **F12** in query windows; uses the name at the cursor |
+| Check source control… | `SsmsDataAnalyzer.CheckSourceControl` |
 
 ---
 

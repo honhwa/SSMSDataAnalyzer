@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.27.0**
+**`SsmsDataAnalyzer.vsix` — version 0.28.8** *(preview, `source-control-sync-feature` branch)*
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -32,6 +32,24 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.28.8 (preview)** — Check source control: the columns no longer open squashed to a few pixels the first time the panel is shown. When every column comes up at the minimum width, the panel puts the proper widths back; a column you resize yourself is left as you set it.
+
+**0.28.7 (preview)** — Check source control now checks **the database you selected in Object Explorer**, even if your last query tab is on another server. Before, SSMS's "active document" (your last query tab, e.g. on AG1LISTENER) was preferred over the selection, so clicking a database on SQLTEST7 and checking scanned the wrong server. The query window is used only when you start the check from inside it (e.g. **Ctrl+Alt+Q, C** while typing) or nothing is selected in Object Explorer. Also: a database not mapped to a project is now **one row** ("178 changed objects — map to check these") instead of one row per object.
+
+**0.28.6 (preview)** — Check source control: choose **where it looks** — *Server + history* (default), *History* (only what you ran) or *Server* (what changed on the checked databases, by anyone). **Tables are now compared** when your history names them: column names, types, sizes, nullability and identity, against the project's `CREATE TABLE`. Differences are spelled out, e.g. *"[Code]: nvarchar(60) in repo, nvarchar(50) on server"*. Indexes and constraints are not compared, and a table found only by the server scan still says so rather than being guessed at. Also fixed: a table whose file adds constraints in separate `ALTER TABLE` blocks is no longer reported as "defined in several files".
+
+**0.28.5 (preview)** — Check source control **remembers every database you check** during the session. Before, the server scan only covered the database selected at that moment, so checking SQLTEST7 and then SQLTEST8 made SQLTEST7's results vanish (SQLTEST8's stayed only because they came from your own Query History, which is read for every server). Now each check rescans every database you have checked, and the status line lists them with what each found. **Check selected only** is a full reset: it shows **only** the selected database — the other databases are forgotten and your history on other servers is hidden — until the next **Check now** shows everything again.
+
+**0.28.4 (preview)** — Check source control: **triggers are no longer falsely reported "missing from repo".** SSDT keeps a table's triggers in the table's own file, and the check only read the first object in each file — so it never saw a single trigger (0 of 22 in the Finances project) and flagged every changed one as missing. Every object in a file is now read, and each is compared against its own part of the file.
+
+**0.28.3 (preview)** — Check source control: the findings list now **fills the window** and follows it when you resize or dock it (it used to stop at a fixed height). Server/database groups are collapsible headers in that one list. **Right-click now acts on the row you clicked** — before, Compare and the other actions ran on whichever row had been selected earlier, which could be a different object. Status and Source read as words ("Differs from repo", "Your history") instead of internal names, and the Reason column keeps a readable width instead of being squeezed away.
+
+**0.28.2 (preview)** — Check source control shows **each server separately**. The same database on two servers (say DEV and UAT) was checked per server but displayed in one group, headed with only one server's name and with nothing to tell the rows apart. Each server now gets its own group — "AgricultureFinances (DEV)", "AgricultureFinances (UAT)" — next to each other, each compared against the same project.
+
+**0.28.1 (preview)** — Check source control now uses **Object Explorer's connection** too. In 0.28.0 it only reused query windows, so with every query window disconnected nothing could be checked even though Object Explorer was connected to that very server. It looks the server up by its real name (Object Explorer may display it under another name, such as "Test8 - OLTP"), and when no query window is connected the server-side scan uses the **database selected in Object Explorer**; the status line says which connection it used. Also: a large script that touched thousands of objects no longer fails the whole check (SQL Server's 2,100-parameter limit).
+
+**0.28.0 (preview)** — New: **Check source control…** (Tools menu, or **Ctrl+Alt+Q, C**). A read-only alarm for database changes you forgot to commit: it looks at what you created, altered or dropped (from Query History) and what changed on the server you are connected to, over the last 15 days, and checks each object against the SSDT project you map that database to. It reports objects **missing from the repo**, **different from the file**, **on disk but not in the `.sqlproj`** (which SSDT silently ignores), and **dropped but still in the repo**. It never writes to the repository or to any database. Right-click a finding for **Compare** (server vs file), open the file, or script the server's version into a new query window. Also fixed: a default shortcut you deleted can no longer come back when a new version adds a shortcut.
 
 **0.27.0** — **Now requires SSMS 22.3 or newer.** A user on SSMS 22.0 reported an error when SSMS starts, so the installer no longer accepts builds below 22.3 — it refuses up front instead of installing something that misbehaves. Check yours under **Help → About**. 22.3 is the oldest build actually tested — every feature has been confirmed working on it, and on 22.10 — so the requirement sits on evidence, not caution. **If it is already installed on an older build**, this does not remove it — uninstall it under **Extensions → Manage Extensions**.
 

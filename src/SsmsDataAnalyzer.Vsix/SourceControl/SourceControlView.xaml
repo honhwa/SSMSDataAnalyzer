@@ -1,0 +1,164 @@
+<UserControl x:Class="SsmsDataAnalyzer.Vsix.SourceControl.SourceControlView"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vsp="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:local="clr-namespace:SsmsDataAnalyzer.Vsix.SourceControl"
+             mc:Ignorable="d"
+             d:DesignHeight="520" d:DesignWidth="820"
+             Background="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowBackgroundBrushKey}}">
+
+    <!--
+        docs/source-control-sync-plan.md §9 Phase 1 item 2: findings grouped by database
+        (Expander per database), Matches hidden unless "Show all" is ticked, a window filter
+        (Today/7/15/30 days, default 15), a "Check now" button (the check also runs on open;
+        see SourceControlView.xaml.cs), and a status line that always says what was checked and
+        why anything was skipped.
+
+        VS theme brushes only (project rule), same convention as QueryHistoryView. No
+        AlternatingRowBackground on any DataGrid (project rule: it beats a row-style trigger).
+    -->
+    <UserControl.Resources>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter" />
+        <SolidColorBrush x:Key="ScGrayTextBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextColorKey}}" />
+        <SolidColorBrush x:Key="ScGridLineBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextColorKey}}" Opacity="0.30" />
+        <SolidColorBrush x:Key="ScWarnRowBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemHighlightColorKey}}" Opacity="0.12" />
+
+        <Style x:Key="ScToolbarButton" TargetType="Button">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid Margin="6">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Window filter + Show all + Check now (item 2/1). -->
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ComboBox Width="130" VerticalAlignment="Center" Margin="0,0,8,0"
+                          ItemsSource="{Binding WindowOptions}" SelectedItem="{Binding SelectedWindow}" />
+                <!-- Plan 13b.1: where changes are found. History = only what you ran (and the only
+                     source whose tables are compared by columns); Server = what changed on the
+                     checked databases, by anyone. -->
+                <ComboBox Width="140" VerticalAlignment="Center" Margin="0,0,12,0"
+                          ToolTip="Where to look for changes: your Query History, the server's modified dates, or both. Tables are compared only when your history names them."
+                          ItemsSource="{Binding SourceOptions}" SelectedItem="{Binding SelectedSource}" />
+            </StackPanel>
+            <CheckBox Grid.Column="1" Content="Show all (including matches)" VerticalAlignment="Center"
+                      IsChecked="{Binding ShowAll}" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <!-- Each database you check is remembered and rescanned on every check, so moving the
+                     Object Explorer selection never drops a server you just looked at. This resets
+                     that list to the selected database alone. -->
+                <Button Style="{StaticResource ScToolbarButton}" Content="Check selected only"
+                        ToolTip="Reset: show only the selected database. Forgets the other databases checked this session and hides your history on other servers until the next Check now"
+                        Click="CheckSelectedOnlyButton_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+                <Button Style="{StaticResource ScToolbarButton}" Content="Check now"
+                        ToolTip="Scan the selected database, plus every database already checked this session"
+                        Margin="0" Click="CheckNowButton_Click"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+            </StackPanel>
+        </Grid>
+
+        <!--
+            Findings: ONE grid in the star row, so it grows and shrinks with the window when it is
+            resized or docked. Grouped per (server, database) by the view model's
+            ListCollectionView. The first preview nested one grid per group inside a ScrollViewer;
+            a grid there gets unlimited height and stops virtualising, so each had to be capped at
+            a fixed MaxHeight — which is exactly why it did not follow the window (field report).
+            VirtualizingPanel.IsVirtualizingWhenGrouping keeps a 500-row result cheap.
+        -->
+        <DataGrid x:Name="FindingsGrid" Grid.Row="1"
+                  ItemsSource="{Binding FindingsView}" AutoGenerateColumns="False" IsReadOnly="True"
+                  HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                  SelectionUnit="FullRow" SelectionMode="Single" GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="{StaticResource ScGridLineBrush}"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  SelectedItem="{Binding SelectedFinding, Mode=OneWayToSource}"
+                  PreviewMouseRightButtonDown="FindingsGrid_PreviewMouseRightButtonDown"
+                  MouseDoubleClick="FindingsGrid_MouseDoubleClick">
+            <DataGrid.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.ContainerStyle>
+                        <Style TargetType="{x:Type GroupItem}">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type GroupItem}">
+                                        <Expander IsExpanded="True" Margin="0,4,0,2">
+                                            <Expander.Header>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Name, Mode=OneWay}"
+                                                               Foreground="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowTextBrushKey}}" />
+                                                    <TextBlock Margin="8,0,0,0" Text="{Binding ItemCount, Mode=OneWay, StringFormat={}{0} finding(s)}"
+                                                               Foreground="{StaticResource ScGrayTextBrush}" />
+                                                </StackPanel>
+                                            </Expander.Header>
+                                            <ItemsPresenter />
+                                        </Expander>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GroupStyle.ContainerStyle>
+                </GroupStyle>
+            </DataGrid.GroupStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding StatusText, Mode=OneWay}" Value="DiffersFromRepo">
+                            <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding StatusText, Mode=OneWay}" Value="DroppedButInRepo">
+                            <Setter Property="Background" Value="{StaticResource ScWarnRowBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Compare" Click="CompareMenuItem_Click" />
+                    <MenuItem Header="Open repo file" Click="OpenRepoFileMenuItem_Click" />
+                    <MenuItem Header="Script server definition into new window" Click="ScriptMenuItem_Click" />
+                    <MenuItem Header="Copy object name" Click="CopyNameMenuItem_Click" />
+                    <Separator />
+                    <MenuItem Header="Map database to project..." Click="MapMenuItem_Click" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header=" " Binding="{Binding StatusGlyph, Mode=OneWay}" Width="24" />
+                <DataGridTextColumn Header="Object" Binding="{Binding Object, Mode=OneWay}" Width="240" />
+                <DataGridTextColumn Header="Kind" Binding="{Binding Kind, Mode=OneWay}" Width="80" />
+                <DataGridTextColumn Header="Changed" Binding="{Binding ChangedText, Mode=OneWay}" Width="130" />
+                <DataGridTextColumn Header="Source" Binding="{Binding SourceDisplay, Mode=OneWay}" Width="110" />
+                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplay, Mode=OneWay}" Width="150" />
+                <DataGridTextColumn Header="File" Binding="{Binding RelativePath, Mode=OneWay}" Width="200" />
+                <!-- MinWidth: at narrower widths the star column was squeezed to a sliver, and Reason is
+                     the one column that says WHY a row was not compared. Scroll sideways instead. -->
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason, Mode=OneWay}" Width="*" MinWidth="240" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Status line: always says what was checked and why anything was skipped. -->
+        <TextBlock Grid.Row="2" Margin="0,6,0,0" Text="{Binding StatusText}"
+                   Foreground="{StaticResource ScGrayTextBrush}" TextWrapping="Wrap" />
+    </Grid>
+</UserControl>

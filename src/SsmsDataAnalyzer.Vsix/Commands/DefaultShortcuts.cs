@@ -21,24 +21,51 @@ namespace SsmsDataAnalyzer.Vsix.Commands
     /// assumed: look first, and if anything is already bound, leave it alone.
     ///
     /// The rules, in order:
-    /// 1. Run at most once per shortcut set (a version stamp in the settings store). Someone who
-    ///    DELETES one of these shortcuts does not get it forced back on the next start.
+    /// 1. Each command gets exactly ONE chance at its default, ever -- tracked per command (see
+    ///    <see cref="OfferedProperty"/>), not by a single shortcut-set version stamp. A version
+    ///    bump would re-run the WHOLE list, and a command whose default the user had DELETED has
+    ///    no binding at that point, so it would be handed that default again -- breaking the
+    ///    promise that a deleted default stays deleted. (docs/source-control-sync-plan.md §13.9
+    ///    lead correction, 2026-09-29: this replaced the old <c>ShortcutSetVersion</c> stamp,
+    ///    which had exactly that bug. It ships now because this is the first release that adds
+    ///    a command to <see cref="Defaults"/> after the original ten.)
     /// 2. Never touch a command that already has any binding — theirs, or ours from a previous
     ///    run.
     /// 3. Never take a key another command already uses. Assigning over it would silently break
     ///    whatever that was, which is exactly the complaint this class exists to prevent.
+    ///
+    /// Migration: the old v0.25 stamp (<see cref="AppliedProperty"/> == "1") means the original
+    /// ten commands have already had their one chance -- they are seeded into the offered list
+    /// rather than being reconsidered, so nobody who deleted one of those ten sees it return.
     ///
     /// Everything here is best-effort: a failure leaves the user with no default shortcut, which
     /// is a minor inconvenience, never a broken SSMS.
     /// </summary>
     internal static class DefaultShortcuts
     {
-        /// <summary>Bump only when the SET below changes, so an existing user's untouched
-        /// commands pick up newly added shortcuts without re-applying the old ones.</summary>
-        private const string ShortcutSetVersion = "1";
-
         private const string CollectionPath = "SsmsDataAnalyzer";
+
+        /// <summary>Legacy v0.25 stamp: "1" means the original ten commands (the ones present
+        /// at the time) were already offered. Read only for migration; never written again.</summary>
         private const string AppliedProperty = "DefaultShortcutsApplied";
+
+        /// <summary>Delimited list of CanonicalNames that have already been offered their
+        /// default, one way or another (assigned, kept-existing, or skipped-conflict all count
+        /// as "offered" -- see <see cref="Apply"/>). '|' cannot appear in a command's
+        /// CanonicalName, so no escaping is needed.</summary>
+        private const string OfferedProperty = "DefaultShortcutsOffered";
+        private const char OfferedSeparator = '|';
+
+        /// <summary>The original ten commands (v0.25), seeded into the offered list on
+        /// migration so a deleted one never comes back.</summary>
+        private static readonly string[] OriginalTenCommands =
+        {
+            "SsmsDataAnalyzer.QueryHistory", "SsmsDataAnalyzer.FindInResults",
+            "SsmsDataAnalyzer.GoToSourceForValue", "SsmsDataAnalyzer.PeekSourceForValue",
+            "SsmsDataAnalyzer.PivotRows", "SsmsDataAnalyzer.AggregateSelection",
+            "SsmsDataAnalyzer.AnalyzeData", "SsmsDataAnalyzer.PasteAsSqlIn",
+            "SsmsDataAnalyzer.PasteAsNumericSqlIn", "SsmsDataAnalyzer.ScriptObjectAsAlter",
+        };
 
         /// <summary>
         /// One chord prefix (Ctrl+Alt+Q, "Query tools") plus a mnemonic letter. A chord claims
@@ -57,6 +84,10 @@ namespace SsmsDataAnalyzer.Vsix.Commands
             ("SsmsDataAnalyzer.PasteAsSqlIn",         "Global::Ctrl+Alt+Q, I"),
             ("SsmsDataAnalyzer.PasteAsNumericSqlIn",  "Global::Ctrl+Alt+Q, N"),
             ("SsmsDataAnalyzer.ScriptObjectAsAlter",  "Global::Ctrl+Alt+Q, S"),
+
+            // docs/source-control-sync-plan.md §13.9 -- first command added since the
+            // original ten; exercises the per-command "offered" tracking above for real.
+            ("SsmsDataAnalyzer.CheckSourceControl",   "Global::Ctrl+Alt+Q, C"),
         };
 
         /// <summary>Scanning every command in the shell to find which keys are taken is the
@@ -73,12 +104,15 @@ namespace SsmsDataAnalyzer.Vsix.Commands
                 var store = GetSettingsStore(serviceProvider);
                 if (store == null) return; // Cannot remember having run; see GetSettingsStore.
 
-                if (store.CollectionExists(CollectionPath)
-                    && store.PropertyExists(CollectionPath, AppliedProperty)
-                    && store.GetString(CollectionPath, AppliedProperty, "") == ShortcutSetVersion)
+                HashSet<string> offered = LoadOfferedSet(store);
+
+                // Rule 1: only a command not yet in the offered set gets a chance this run.
+                var pending = new List<(string Command, string Binding)>();
+                foreach (var entry in Defaults)
                 {
-                    return; // Rule 1: already done for this set.
+                    if (!offered.Contains(entry.Command)) pending.Add(entry);
                 }
+                if (pending.Count == 0) return; // Every known command has already had its chance.
 
                 if (!(serviceProvider.GetService(typeof(DTE)) is DTE dte))
                 {
@@ -86,10 +120,10 @@ namespace SsmsDataAnalyzer.Vsix.Commands
                     return;
                 }
 
-                Apply(dte);
+                IEnumerable<string> nowOffered = Apply(dte, pending);
 
-                if (!store.CollectionExists(CollectionPath)) store.CreateCollection(CollectionPath);
-                store.SetString(CollectionPath, AppliedProperty, ShortcutSetVersion);
+                foreach (string name in nowOffered) offered.Add(name);
+                SaveOfferedSet(store, offered);
             }
             catch (Exception ex)
             {
@@ -98,7 +132,55 @@ namespace SsmsDataAnalyzer.Vsix.Commands
             }
         }
 
-        private static void Apply(DTE dte)
+        /// <summary>The offered set as of the last run: the persisted list, plus (migration)
+        /// the original ten commands when only the legacy v0.25 stamp is present and no list
+        /// has been written yet.</summary>
+        private static HashSet<string> LoadOfferedSet(WritableSettingsStore store)
+        {
+            var offered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            bool hasOfferedList = store.CollectionExists(CollectionPath)
+                && store.PropertyExists(CollectionPath, OfferedProperty);
+
+            if (hasOfferedList)
+            {
+                string raw = store.GetString(CollectionPath, OfferedProperty, "");
+                foreach (string name in raw.Split(OfferedSeparator))
+                {
+                    if (!string.IsNullOrEmpty(name)) offered.Add(name);
+                }
+                return offered;
+            }
+
+            // No offered list yet. Migration: the legacy stamp means the original ten already
+            // had their one chance -- seed them in so none of them can come back from the dead
+            // for someone who deleted one. A machine with neither marker (fresh install) seeds
+            // nothing, so every command -- the original ten included -- gets its normal chance.
+            bool legacyApplied = store.CollectionExists(CollectionPath)
+                && store.PropertyExists(CollectionPath, AppliedProperty)
+                && store.GetString(CollectionPath, AppliedProperty, "") == "1";
+
+            if (legacyApplied)
+            {
+                foreach (string name in OriginalTenCommands) offered.Add(name);
+            }
+
+            return offered;
+        }
+
+        private static void SaveOfferedSet(WritableSettingsStore store, HashSet<string> offered)
+        {
+            if (!store.CollectionExists(CollectionPath)) store.CreateCollection(CollectionPath);
+            store.SetString(CollectionPath, OfferedProperty, string.Join(OfferedSeparator.ToString(), offered));
+        }
+
+        /// <summary>Applies only the commands in <paramref name="pending"/> (those not yet
+        /// offered). Returns the CanonicalNames that were actually looked at this run --
+        /// assigned, left because they already had a binding, or skipped for a key conflict
+        /// all count as "offered": the command had its one chance, whatever it decided. A
+        /// command not present in this build at all is NOT returned, so it still gets its
+        /// chance once it appears in a later session.</summary>
+        private static IEnumerable<string> Apply(DTE dte, List<(string Command, string Binding)> pending)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
@@ -107,15 +189,17 @@ namespace SsmsDataAnalyzer.Vsix.Commands
             if (keysInUse == null)
             {
                 OeDiagnostics.Warn("Default shortcuts: the shell's existing shortcuts could not be read in time, so none were assigned (assign your own under Tools > Options > Environment > Keyboard).");
-                return;
+                return Array.Empty<string>();
             }
 
             int assigned = 0, keptExisting = 0, skippedConflict = 0;
+            var nowOffered = new List<string>();
 
-            foreach (var (commandName, binding) in Defaults)
+            foreach (var (commandName, binding) in pending)
             {
                 Command command = Find(byName, commandName);
-                if (command == null) continue; // Not present in this build.
+                if (command == null) continue; // Not present in this build -- try again next time.
+                nowOffered.Add(commandName);
 
                 // Rule 2: anything already bound is the user's business, not ours.
                 if (HasAnyBinding(command)) { keptExisting++; continue; }
@@ -137,6 +221,7 @@ namespace SsmsDataAnalyzer.Vsix.Commands
 
             OeDiagnostics.Info("Default shortcuts: " + assigned + " assigned, " + keptExisting
                 + " left as already configured, " + skippedConflict + " skipped because the key was already in use.");
+            return nowOffered;
         }
 
         /// <summary>

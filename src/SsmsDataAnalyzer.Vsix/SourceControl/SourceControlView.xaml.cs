@@ -1,0 +1,236 @@
+using System;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
+using Microsoft.VisualStudio.Shell;
+
+namespace SsmsDataAnalyzer.Vsix.SourceControl
+{
+    internal sealed class InverseBoolConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+            !(value is bool b && b);
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+            !(value is bool b && b);
+    }
+
+    /// <summary>Code-behind for SourceControlView -- wires the toolbar/context menu to
+    /// SourceControlViewModel's action methods, same shape as History.QueryHistoryView.</summary>
+    internal partial class SourceControlView : UserControl
+    {
+        internal SourceControlViewModel ViewModel { get; }
+
+        public SourceControlView()
+        {
+            InitializeComponent();
+            ViewModel = new SourceControlViewModel();
+            DataContext = ViewModel;
+
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+                _intendedWidths[column] = column.Width;
+
+            FindingsGrid.SizeChanged += (s, e) => ScheduleColumnRepair();
+            FindingsGrid.Loaded += (s, e) => ScheduleColumnRepair();
+            FindingsGrid.IsVisibleChanged += (s, e) => { if ((bool)e.NewValue) ScheduleColumnRepair(); };
+            // The view model only ever changes the findings on the UI thread.
+            ((System.Collections.Specialized.INotifyCollectionChanged)ViewModel.FindingsView).CollectionChanged +=
+                (s, e) => { ThreadHelper.ThrowIfNotOnUIThread(); ScheduleColumnRepair(); };
+        }
+
+        // ---- first-open column widths ---------------------------------------------------------
+
+        private readonly System.Collections.Generic.Dictionary<DataGridColumn, DataGridLength> _intendedWidths =
+            new System.Collections.Generic.Dictionary<DataGridColumn, DataGridLength>();
+        private bool _repairScheduled;
+
+        /// <summary>
+        /// Field report: the first time the panel opens in SSMS, every column is ~20 px — WPF's
+        /// DataGrid.MinColumnWidth — and stays that way. It does not reproduce in a plain WPF
+        /// window however the grid is sized or filled (tried: tiny and zero-width starts, empty
+        /// then filled, filled while narrow), so it comes from how SSMS hosts the tool window, and
+        /// the cause cannot be observed from here.
+        ///
+        /// So this repairs the signature instead: when EVERY fixed-width column is sitting at the
+        /// minimum while the grid itself has real width, put the widths from the XAML back. Nobody
+        /// resizes all columns to 20 px by hand, and a column the user resized is left alone.
+        /// Deferred below layout priority so it runs after the pass that produced the widths.
+        /// </summary>
+        private void ScheduleColumnRepair()
+        {
+            if (_repairScheduled) return;
+            _repairScheduled = true;
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                // Yield below layout priority, so this runs after the pass that set the widths.
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                _repairScheduled = false;
+                RepairCollapsedColumns();
+            }).FileAndForget("SsmsDataAnalyzer/SourceControl/RepairColumns");
+        }
+
+        private void RepairCollapsedColumns()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (FindingsGrid.ActualWidth < 200) return; // not laid out for real yet
+
+            double floor = FindingsGrid.MinColumnWidth + 4;
+            var fixedColumns = new System.Collections.Generic.List<DataGridColumn>();
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+            {
+                if (_intendedWidths.TryGetValue(column, out var intended) && intended.IsAbsolute && intended.Value > floor * 2)
+                    fixedColumns.Add(column);
+            }
+            if (fixedColumns.Count == 0) return;
+
+            foreach (DataGridColumn column in fixedColumns)
+                if (column.ActualWidth > floor) return; // at least one is fine: not the bug
+
+            foreach (DataGridColumn column in FindingsGrid.Columns)
+            {
+                if (!_intendedWidths.TryGetValue(column, out var intended)) continue;
+                // Resetting through a different value forces the grid to recompute it.
+                column.Width = new DataGridLength(1);
+                column.Width = intended;
+            }
+        }
+
+        /// <summary>Called once by SourceControlToolWindow right after construction. The check
+        /// also runs when the panel opens (docs/source-control-sync-plan.md §9 Phase 1 item 1).</summary>
+        internal void Initialize(AsyncPackage package, bool startedInQueryWindow = false)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ViewModel.Package = package;
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckAsync(startedInQueryWindow))
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/InitialCheck");
+        }
+
+        internal void Detach()
+        {
+            ViewModel.Dispose();
+        }
+
+        private void CheckNowButton_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckAsync())
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/CheckNow");
+        }
+
+        private void CheckSelectedOnlyButton_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.RunCheckSelectedOnlyAsync())
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/CheckSelectedOnly");
+        }
+
+        private FindingItem SelectedRow(object sender)
+        {
+            var grid = sender as FrameworkElement;
+            // ContextMenu items live in a logical tree rooted at the DataGrid's PlacementTarget,
+            // not the visual tree -- the simplest reliable source is the view model's own
+            // SelectedFinding, kept current by each row's own binding.
+            return ViewModel.SelectedFinding;
+        }
+
+        private void CompareMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = SelectedRow(sender);
+            if (item == null) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.CompareAsync(item))
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/Compare");
+        }
+
+        private void OpenRepoFileMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = SelectedRow(sender);
+            if (item == null) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.OpenRepoFileAsync(item))
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/OpenRepoFile");
+        }
+
+        private void ScriptMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = SelectedRow(sender);
+            if (item == null) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.ScriptServerDefinitionAsync(item))
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/Script");
+        }
+
+        private void CopyNameMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = SelectedRow(sender);
+            if (item != null) ViewModel.CopyObjectName(item);
+        }
+
+        private void MapMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = SelectedRow(sender);
+            if (item == null) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.MapToProjectAsync(item))
+                .FileAndForget("SsmsDataAnalyzer/SourceControl/MapToProject");
+        }
+
+        /// <summary>
+        /// Right-click selects the row under the pointer before the menu opens. A WPF DataGrid
+        /// does not do this on its own, and every menu action works on SelectedFinding — so
+        /// right-clicking a row you had not left-clicked first ran Compare (or Script, or Copy)
+        /// on whichever row was selected before: the wrong object, with nothing to say so.
+        /// Right-clicking empty space clears the selection, so the actions have nothing to act
+        /// on rather than something stale.
+        /// </summary>
+        private void FindingsGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var node = e.OriginalSource as DependencyObject;
+            while (node != null && !(node is DataGridRow))
+            {
+                node = node is System.Windows.Media.Visual || node is System.Windows.Media.Media3D.Visual3D
+                    ? System.Windows.Media.VisualTreeHelper.GetParent(node)
+                    : LogicalTreeHelper.GetParent(node);
+            }
+
+            if (node is DataGridRow row)
+            {
+                row.IsSelected = true;
+                FindingsGrid.SelectedItem = row.Item;
+                row.Focus();
+            }
+            else
+            {
+                FindingsGrid.SelectedItem = null;
+            }
+        }
+
+        private void FindingsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var item = ((FrameworkElement)e.OriginalSource).DataContext as FindingItem ?? ViewModel.SelectedFinding;
+            if (item == null) return;
+
+            if (item.IsUnmapped)
+            {
+                ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.MapToProjectAsync(item))
+                    .FileAndForget("SsmsDataAnalyzer/SourceControl/MapToProject");
+            }
+            else if (item.CanCompare)
+            {
+                ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.CompareAsync(item))
+                    .FileAndForget("SsmsDataAnalyzer/SourceControl/Compare");
+            }
+            else if (item.CanOpenRepoFile)
+            {
+                ThreadHelper.JoinableTaskFactory.RunAsync(() => ViewModel.OpenRepoFileAsync(item))
+                    .FileAndForget("SsmsDataAnalyzer/SourceControl/OpenRepoFile");
+            }
+        }
+    }
+}
