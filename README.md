@@ -681,6 +681,9 @@ It only ever **reads**. It never writes, updates or deletes anything.
   log files.
 - **Query History** records only what you executed, locally and encrypted; it never runs anything
   by itself and never sends anything anywhere.
+- **Check source control** only reads the catalog (`sys.objects`, `sys.sql_modules`,
+  `sys.columns`) and your project files. It never writes to a database or to your repository,
+  and it reuses the connections you already have open.
 
 ---
 
@@ -704,6 +707,12 @@ It only ever **reads**. It never writes, updates or deletes anything.
   executions were seen, how many were written, and the reason for the last one that was not.
   Queries run from a query shortcut (Ctrl+3, Alt+F1, …) are never recorded — see
   [Feature 8](#feature-8--query-history).
+- **Check source control shows the wrong database, or nothing** — read the status line under the
+  list: it names every database it scanned and why anything was skipped. It checks the database
+  selected in **Object Explorer** (or the query window you started it from); **Check selected
+  only** resets it to just that one. A database with no project mapped shows one row —
+  right-click it → **Map database to project…**. A server with no open connection is listed
+  as not compared: connect to it in Object Explorer and check again.
 - **A keyboard shortcut does nothing** — check it is actually assigned in **Tools → Options… →
   Environment → Keyboard** (search `SsmsDataAnalyzer`). A default is skipped when the key was
   already in use on your machine. Commands that act on a cell or a selection say what they
@@ -720,10 +729,11 @@ It only ever **reads**. It never writes, updates or deletes anything.
 src/SsmsDataAnalyzer.Core/   netstandard2.0 — profiling engine, pivot, aggregate and result-shape logic, zero VS dependencies
 src/SsmsDataAnalyzer.Cli/    net8.0 — same engine, scriptable from a terminal
 src/SsmsDataAnalyzer.Vsix/   net472 — the SSMS 22 extension
-tests/                       xUnit — ~390 tests, unit + integration
+tests/                       xUnit — ~560 tests, unit + integration
 tools/seed/                  seeded test database + verified ground truth
 docs/                        reverse-engineering notes on SSMS's internals, and one plan per feature
-                             (pivot-plan.md, query-history-plan.md, *-api.md spike reports)
+                             (pivot-plan.md, query-history-plan.md, source-control-sync-plan.md,
+                             *-api.md spike reports)
 spikes/OeProbe/              metadata/IL inspector used to produce those notes
 dist/                        the released .vsix and VERSION.md
 ```

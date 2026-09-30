@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.28.8** *(preview, `source-control-sync-feature` branch)*
+**`SsmsDataAnalyzer.vsix` — version 0.29.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -29,9 +29,12 @@ why.
 | Paste a list as an IN clause | In a query window, right-click → **Paste as SQL IN (...)** |
 | Compare rows side by side | Select rows in the results grid → right-click → **Pivot selected rows…** |
 | See what you ran earlier | **Tools → Query History…**, or the *SSMS Data Analyzer* toolbar |
+| Catch changes you forgot to commit | **Tools → Check source control…** (Ctrl+Alt+Q, C) |
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.29.0** — New: **Check source control** (Tools → Check source control…, or **Ctrl+Alt+Q, C**). Lists the database objects you changed but haven't committed to your SSDT project: **missing from the repo**, **different from the file**, **on disk but not in the `.sqlproj`**, or **dropped but still in the repo**. Changes come from your Query History, from the server's modification dates (changes by anyone), or both. Procedures, views, functions and triggers are compared by their text, ignoring formatting; tables by their columns. Map each database to its project once; every server with that database uses it. Read-only: it never writes to your repository or to a database. This is the release of the 0.28.x previews below.
 
 **0.28.8 (preview)** — Check source control: the columns no longer open squashed to a few pixels the first time the panel is shown. When every column comes up at the minimum width, the panel puts the proper widths back; a column you resize yourself is left as you set it.
 
