@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.29.0**
+**`SsmsDataAnalyzer.vsix` — version 0.29.1**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -33,6 +33,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.29.1** — **Go to source, Peek and pivot links now work on `SELECT *` joined to a #temp table.** A query like `SELECT 'x', * FROM Finances.[T] te JOIN #temp t ...` declined for every column, because a bare `*` was only expanded for single-table queries. It now expands table by table in FROM order (SQL Server's rule): the real table's columns get their links, and the #temp table's columns simply get none. Every linked column is still checked against its header in the grid, and with two #temp-like tables in one join it still declines, since their positions can't be known.
 
 **0.29.0** — New: **Check source control** (Tools → Check source control…, or **Ctrl+Alt+Q, C**). Lists the database objects you changed but haven't committed to your SSDT project: **missing from the repo**, **different from the file**, **on disk but not in the `.sqlproj`**, or **dropped but still in the repo**. Changes come from your Query History, from the server's modification dates (changes by anyone), or both. Procedures, views, functions and triggers are compared by their text, ignoring formatting; tables by their columns. Map each database to its project once; every server with that database uses it. Read-only: it never writes to your repository or to a database. This is the release of the 0.28.x previews below.
 

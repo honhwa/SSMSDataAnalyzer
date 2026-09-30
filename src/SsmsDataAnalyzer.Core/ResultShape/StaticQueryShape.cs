@@ -209,8 +209,11 @@ namespace SsmsDataAnalyzer.Core.ResultShape
             var items = shape.SelectItems;
             if (items.Any(i => i.IsStar))
             {
-                items = ExpandStars(shape, expandStar);
-                if (items == null) return StaticShapeResult.Decline(StarReason);
+                var expansion = ExpandStars(shape, expandStar);
+                if (expansion == null) return StaticShapeResult.Decline(StarReason);
+                if (expansion.HasUnknownBlock)
+                    return ResolveAroundUnknownBlock(shape, gridColumnNames, expansion);
+                items = expansion.Prefix;
             }
 
             if (items.Count != gridColumnNames.Count) return StaticShapeResult.Decline(CountReason);
@@ -232,17 +235,32 @@ namespace SsmsDataAnalyzer.Core.ResultShape
             return StaticShapeResult.Match(columns);
         }
 
+        /// <summary>The select list with every star expanded, split around at most one block of
+        /// columns whose count cannot be known (see <see cref="ExpandStars"/>).</summary>
+        private sealed class StarExpansion
+        {
+            public readonly List<StaticSelectItem> Prefix = new List<StaticSelectItem>();
+            public readonly List<StaticSelectItem> Suffix = new List<StaticSelectItem>();
+            public bool HasUnknownBlock;
+        }
+
         /// <summary>
         /// Replaces every <c>*</c> / <c>alias.*</c> with one entry per real column, in catalog
         /// order, so a <c>SELECT FA.*, x, y</c> grid can still be traced back to its tables.
-        /// Returns null when any star cannot be expanded with certainty, which declines the whole
-        /// statement: the caller must never receive a partially guessed list.
         ///
-        /// Refused outright, because the expansion's order or content would be a guess: a set
-        /// operation; a bare <c>*</c> with anything other than exactly one FROM item; a star
-        /// whose qualifier is not a real, unambiguous base table.
+        /// A bare <c>*</c> across a join expands table by table in FROM-clause order — SQL
+        /// Server's documented rule, so the order is not a guess. A table whose columns cannot
+        /// be read (a <c>#temp</c> table, a table variable, a CTE, a derived table) becomes ONE
+        /// block of unknown width. Field report: <c>SELECT 'x', * FROM Finances.[T] te JOIN
+        /// #temp t ...</c> declined for every column, although everything before the #temp
+        /// columns sits at positions that are certain.
+        ///
+        /// Returns null — declining the whole statement — when anything is uncertain: a set
+        /// operation, a star whose qualifier names no known FROM item, a real table whose columns
+        /// could not be read, a statement with nothing to expand, or MORE than one unknown block
+        /// (with two, the position of the columns between them cannot be known).
         /// </summary>
-        private static IReadOnlyList<StaticSelectItem> ExpandStars(
+        private static StarExpansion ExpandStars(
             StaticQueryShape shape, Func<StaticFromItem, IReadOnlyList<string>> expandStar)
         {
             if (expandStar == null) return null;
@@ -251,43 +269,100 @@ namespace SsmsDataAnalyzer.Core.ResultShape
             // would only invent entries nobody can use.
             if (shape.IsSetOperation) return null;
 
-            var targets = ResolveStarTargets(shape);
-            if (targets == null) return null;
-
-            var expanded = new List<StaticSelectItem>(shape.SelectItems.Count);
-            int starIndex = 0;
+            var aliases = BuildAliasMap(shape);
+            var cteNames = new HashSet<string>(shape.CteNames ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            var expansion = new StarExpansion();
 
             foreach (var item in shape.SelectItems)
             {
-                if (!item.IsStar) { expanded.Add(item); continue; }
-
-                var target = targets[starIndex++];
-                IReadOnlyList<string> columnNames = expandStar(target.Table);
-                if (columnNames == null || columnNames.Count == 0) return null;
-
-                foreach (string columnName in columnNames)
+                if (!item.IsStar)
                 {
-                    if (string.IsNullOrEmpty(columnName)) return null;
-                    expanded.Add(new StaticSelectItem(columnName, target.Qualifier, columnName));
+                    (expansion.HasUnknownBlock ? expansion.Suffix : expansion.Prefix).Add(item);
+                    continue;
+                }
+
+                var targets = TargetsFor(item, shape, aliases, cteNames);
+                if (targets == null) return null;
+
+                foreach (var target in targets)
+                {
+                    if (target.IsUnknownWidth)
+                    {
+                        if (expansion.HasUnknownBlock) return null; // a second one: positions unknowable
+                        expansion.HasUnknownBlock = true;
+                        continue;
+                    }
+
+                    IReadOnlyList<string> columnNames = expandStar(target.Table);
+                    if (columnNames == null || columnNames.Count == 0) return null;
+
+                    var into = expansion.HasUnknownBlock ? expansion.Suffix : expansion.Prefix;
+                    foreach (string columnName in columnNames)
+                    {
+                        if (string.IsNullOrEmpty(columnName)) return null;
+                        into.Add(new StaticSelectItem(columnName, target.Qualifier, columnName));
+                    }
                 }
             }
 
-            return expanded;
+            // Nothing but an unknown block: nothing to verify and nothing to report.
+            if (expansion.HasUnknownBlock && expansion.Prefix.Count == 0 && expansion.Suffix.Count == 0) return null;
+
+            return expansion;
+        }
+
+        /// <summary>
+        /// Columns before the unknown block are matched to the grid from the LEFT, columns after
+        /// it from the RIGHT, and the grid columns in between — the #temp table's — get no source.
+        /// The rule that makes the static path safe is unchanged: every column that gets a source
+        /// must match its grid header by name, at a position that is certain.
+        /// </summary>
+        private static StaticShapeResult ResolveAroundUnknownBlock(
+            StaticQueryShape shape, IReadOnlyList<string> grid, StarExpansion expansion)
+        {
+            int prefix = expansion.Prefix.Count;
+            int suffix = expansion.Suffix.Count;
+            int unknownWidth = grid.Count - prefix - suffix;
+            if (unknownWidth < 1) return StaticShapeResult.Decline(CountReason);
+
+            for (int i = 0; i < prefix; i++)
+                if (!ResultShapeMatcher.NamesMatch(expansion.Prefix[i].OutputName, grid[i]))
+                    return StaticShapeResult.Decline(NameReason);
+
+            for (int k = 0; k < suffix; k++)
+                if (!ResultShapeMatcher.NamesMatch(expansion.Suffix[k].OutputName, grid[prefix + unknownWidth + k]))
+                    return StaticShapeResult.Decline(NameReason);
+
+            var aliases = BuildAliasMap(shape);
+            var columns = new StaticColumnSource[grid.Count];
+            for (int i = 0; i < prefix; i++)
+                columns[i] = ResolveOne(expansion.Prefix[i], aliases);
+            for (int u = 0; u < unknownWidth; u++)
+                columns[prefix + u] = StaticColumnSource.NoSource(grid[prefix + u]);
+            for (int k = 0; k < suffix; k++)
+                columns[prefix + unknownWidth + k] = ResolveOne(expansion.Suffix[k], aliases);
+
+            return StaticShapeResult.Match(columns);
         }
 
         /// <summary>A star and the table it stands for, in select-list order.</summary>
         public sealed class StarTarget
         {
-            public StarTarget(StaticFromItem table, IReadOnlyList<string> qualifier)
+            public StarTarget(StaticFromItem table, IReadOnlyList<string> qualifier, bool isUnknownWidth = false)
             {
                 Table = table;
                 Qualifier = qualifier;
+            IsUnknownWidth = isUnknownWidth;
             }
 
             public StaticFromItem Table { get; }
             /// <summary>What to qualify the expanded columns with, so they resolve back to this
             /// same table through the ordinary alias rules.</summary>
             public IReadOnlyList<string> Qualifier { get; }
+
+            /// <summary>A #temp table, table variable, CTE or derived table: its columns cannot be read
+            /// from the catalog, so it expands to a block of unknown width (never loaded).</summary>
+            public bool IsUnknownWidth { get; }
         }
 
         /// <summary>
@@ -303,45 +378,68 @@ namespace SsmsDataAnalyzer.Core.ResultShape
 
             var aliases = BuildAliasMap(shape);
             var cteNames = new HashSet<string>(shape.CteNames ?? new string[0], StringComparer.OrdinalIgnoreCase);
-            var targets = new List<StarTarget>();
+            var all = new List<StarTarget>();
 
             foreach (var item in shape.SelectItems)
             {
                 if (!item.IsStar) continue;
-
-                StaticFromItem table;
-                IReadOnlyList<string> qualifier = item.QualifierParts;
-
-                if (qualifier.Count == 0)
-                {
-                    // Bare *: only safe with exactly one table. Across a join the column order
-                    // is the server's business, not ours.
-                    if (shape.FromItems.Count != 1) return null;
-                    table = shape.FromItems[0];
-                    if (!IsRealTable(table, cteNames)) return null;
-
-                    string soleKey = table.Alias ?? table.Table;
-                    if (string.IsNullOrEmpty(soleKey)) return null;
-                    qualifier = new[] { soleKey };
-                }
-                else
-                {
-                    if (qualifier.Count > 3) return null;
-                    string key = qualifier[qualifier.Count - 1];
-                    if (!aliases.TryGetValue(key, out table) || table == null) return null;
-
-                    if (qualifier.Count >= 2)
-                    {
-                        if (table.Alias != null) return null;
-                        if (!EqualsName(table.Schema, qualifier[qualifier.Count - 2])) return null;
-                        if (qualifier.Count == 3 && !EqualsName(table.Database, qualifier[0])) return null;
-                    }
-                }
-
-                targets.Add(new StarTarget(table, qualifier));
+                var targets = TargetsFor(item, shape, aliases, cteNames);
+                if (targets == null) return null;
+                all.AddRange(targets);
             }
 
-            return targets;
+            return all;
+        }
+
+        /// <summary>What one star expands to, in order: one target for <c>alias.*</c>, one per
+        /// FROM item (FROM-clause order) for a bare <c>*</c>. Null when a qualifier names no known
+        /// FROM item or names one ambiguously.</summary>
+        private static List<StarTarget> TargetsFor(StaticSelectItem item, StaticQueryShape shape,
+            Dictionary<string, StaticFromItem> aliases, HashSet<string> cteNames)
+        {
+            IReadOnlyList<string> qualifier = item.QualifierParts;
+
+            if (qualifier.Count == 0)
+            {
+                if (shape.FromItems.Count == 0) return null;
+
+                var targets = new List<StarTarget>();
+                foreach (var from in shape.FromItems)
+                {
+                    string key = from.Alias ?? from.Table;
+                    if (!IsRealTable(from, cteNames))
+                    {
+                        targets.Add(new StarTarget(from, key == null ? new string[0] : new[] { key }, isUnknownWidth: true));
+                        continue;
+                    }
+                    if (string.IsNullOrEmpty(key)) return null;
+                    targets.Add(new StarTarget(from, new[] { key }));
+                }
+                return targets;
+            }
+
+            if (qualifier.Count > 3) return null;
+            string last = qualifier[qualifier.Count - 1];
+
+            // alias.* on a known FROM item that is not a real table (#temp, table variable, CTE,
+            // derived): the alias map records those as null. Unknown width, never loaded.
+            if (qualifier.Count == 1 && aliases.TryGetValue(last, out StaticFromItem mapped) && mapped == null)
+            {
+                var nonReal = shape.FromItems.First(f =>
+                    string.Equals(f.Alias ?? f.Table, last, StringComparison.OrdinalIgnoreCase));
+                return new List<StarTarget> { new StarTarget(nonReal, qualifier, isUnknownWidth: true) };
+            }
+
+            if (!aliases.TryGetValue(last, out StaticFromItem table) || table == null) return null;
+
+            if (qualifier.Count >= 2)
+            {
+                if (table.Alias != null) return null;
+                if (!EqualsName(table.Schema, qualifier[qualifier.Count - 2])) return null;
+                if (qualifier.Count == 3 && !EqualsName(table.Database, qualifier[0])) return null;
+            }
+
+            return new List<StarTarget> { new StarTarget(table, qualifier) };
         }
 
         /// <summary>alias (or bare table name when there is no alias) → the real table it names,

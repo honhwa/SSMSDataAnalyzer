@@ -17,6 +17,8 @@ namespace SsmsDataAnalyzer.Tests.ResultShape
         private static StaticSelectItem Col(string qualifier, string column, string alias = null) =>
             new StaticSelectItem(alias ?? column, qualifier?.Split('.'), column);
 
+        private static StaticSelectItem Expr(string alias) => new StaticSelectItem(alias, null, null);
+
         private static StaticSelectItem Star(string qualifier = null) =>
             StaticSelectItem.Star(qualifier?.Split('.'));
 
@@ -117,32 +119,53 @@ namespace SsmsDataAnalyzer.Tests.ResultShape
         }
 
         [Fact]
-        public void BareStar_AcrossAJoin_Declines()
+        public void BareStar_AcrossAJoin_ExpandsInFromOrder()
         {
-            // Which table's columns come first is the server's business, not ours.
+            // SQL Server expands a bare * table by table in FROM-clause order: a documented rule,
+            // so across two REAL tables every column position is certain.
             var shape = Shape(
                 new[] { Star() },
                 new[] { Table("dbo", "Orders", "o"), Table("dbo", "Customers", "c") });
 
-            Assert.False(StaticShapeResolver.Resolve(shape, new[] { "Id" }, Catalog("Orders", "Id")).IsMatch);
-            Assert.Null(StaticShapeResolver.ResolveStarTargets(shape));
+            Func<StaticFromItem, IReadOnlyList<string>> catalog = t =>
+                t.Table == "Orders" ? new[] { "Id", "Total" } : t.Table == "Customers" ? new[] { "CustomerId", "Name" } : null;
+
+            var result = StaticShapeResolver.Resolve(shape, new[] { "Id", "Total", "CustomerId", "Name" }, catalog);
+
+            Assert.True(result.IsMatch);
+            AssertFrom(result.Columns[1], "dbo", "Orders", "Total");
+            AssertFrom(result.Columns[2], "dbo", "Customers", "CustomerId");
         }
 
         [Fact]
-        public void StarOnATempTable_Declines()
+        public void BareStar_AcrossAJoin_WithAnUnreadableRealTable_Declines()
         {
+            var shape = Shape(new[] { Star() }, new[] { Table("dbo", "Orders", "o"), Table("dbo", "Customers", "c") });
+
+            // Customers cannot be read: its width is unknown and it is a REAL table, so refuse.
+            Assert.False(StaticShapeResolver.Resolve(shape, new[] { "Id" }, Catalog("Orders", "Id")).IsMatch);
+        }
+
+        [Fact]
+        public void StarOnATempTable_Alone_Declines()
+        {
+            // Only unknown columns: nothing to verify and nothing to report.
             var shape = Shape(new[] { Star("t") }, new[] { Table(null, "#tbl12A", "t") });
 
             Assert.False(StaticShapeResolver.Resolve(shape, new[] { "ClientID" }, Catalog("#tbl12A", "ClientID")).IsMatch);
-            Assert.Null(StaticShapeResolver.ResolveStarTargets(shape));
+
+            var targets = StaticShapeResolver.ResolveStarTargets(shape);
+            Assert.Single(targets);
+            Assert.True(targets[0].IsUnknownWidth);
         }
 
         [Fact]
-        public void StarOnACte_Declines()
+        public void StarOnACte_Alone_Declines()
         {
             var shape = Shape(new[] { Star("c") }, new[] { Table(null, "c", null) }, "c");
 
-            Assert.Null(StaticShapeResolver.ResolveStarTargets(shape));
+            Assert.False(StaticShapeResolver.Resolve(shape, new[] { "X" }, Catalog("c", "X")).IsMatch);
+            Assert.True(StaticShapeResolver.ResolveStarTargets(shape).Single().IsUnknownWidth);
         }
 
         [Fact]
@@ -212,6 +235,77 @@ namespace SsmsDataAnalyzer.Tests.ResultShape
             Assert.Equal(schema, c.Schema);
             Assert.Equal(table, c.Table);
             Assert.Equal(column, c.Column);
+        }
+    
+        // ---- one block of unknown width (a #temp table inside the expansion) ---------------
+
+        [Fact]
+        public void FieldReport_LiteralThenStar_OverRealTableJoinTemp_ResolvesTheRealColumns()
+        {
+            // SELECT 'Accounting.Initial.Package.Item', * FROM Finances.[T] AS te
+            //   INNER JOIN #temp t ON ... — te's columns come first, #temp's trail.
+            var shape = Shape(
+                new[] { Expr(null), Star() },
+                new[] { Table("Finances", "Accounting.Initial.Package.Item", "te"), Table(null, "#temp", "t") });
+
+            var grid = new[] { "(No column name)", "ID", "PackageID", "ReferenceNo", "ReferenceNumber", "Extra" };
+
+            var result = StaticShapeResolver.Resolve(shape, grid,
+                Catalog("Accounting.Initial.Package.Item", "ID", "PackageID", "ReferenceNo"));
+
+            Assert.True(result.IsMatch);
+            Assert.False(result.Columns[0].HasSource);                                       // the literal
+            AssertFrom(result.Columns[2], "Finances", "Accounting.Initial.Package.Item", "PackageID");
+            Assert.False(result.Columns[4].HasSource);                                       // #temp's columns
+            Assert.False(result.Columns[5].HasSource);
+        }
+
+        [Fact]
+        public void ColumnsAfterTheUnknownBlock_AreMatchedFromTheRight()
+        {
+            // SELECT t.*, o.Id FROM #t t JOIN dbo.Orders o — o.Id is always the LAST grid column.
+            var shape = Shape(
+                new[] { Star("t"), Col("o", "Id") },
+                new[] { Table(null, "#t", "t"), Table("dbo", "Orders", "o") });
+
+            var result = StaticShapeResolver.Resolve(shape, new[] { "A", "B", "C", "Id" }, Catalog("Orders", "Id"));
+
+            Assert.True(result.IsMatch);
+            Assert.False(result.Columns[0].HasSource);
+            AssertFrom(result.Columns[3], "dbo", "Orders", "Id");
+        }
+
+        [Fact]
+        public void TwoUnknownBlocks_Decline()
+        {
+            // With two blocks of unknown width, nothing between or after them has a known position.
+            var shape = Shape(
+                new[] { Star(), Col("o", "Id") },
+                new[] { Table(null, "#a", "a"), Table("dbo", "Orders", "o"), Table(null, "#b", "b") });
+
+            Assert.False(StaticShapeResolver.Resolve(shape, new[] { "A", "Id", "B", "Id" }, Catalog("Orders", "Id")).IsMatch);
+        }
+
+        [Fact]
+        public void AroundAnUnknownBlock_ANameMismatch_StillDeclines()
+        {
+            // The safety rule is unchanged: every sourced column must match its header.
+            var shape = Shape(
+                new[] { Star() },
+                new[] { Table("dbo", "Orders", "o"), Table(null, "#t", "t") });
+
+            var result = StaticShapeResolver.Resolve(shape, new[] { "Id", "WRONG", "TempCol" }, Catalog("Orders", "Id", "Total"));
+
+            Assert.False(result.IsMatch);
+        }
+
+        [Fact]
+        public void AGridTooShortForTheKnownColumns_Declines()
+        {
+            var shape = Shape(new[] { Star() }, new[] { Table("dbo", "Orders", "o"), Table(null, "#t", "t") });
+
+            // Two known columns and at least one #temp column need three grid columns.
+            Assert.False(StaticShapeResolver.Resolve(shape, new[] { "Id", "Total" }, Catalog("Orders", "Id", "Total")).IsMatch);
         }
     }
 }

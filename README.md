@@ -217,7 +217,9 @@ record.
   real column list is read from the catalog and expanded. That expansion is only used when the
   resulting names match the grid's headers exactly, so a table that has changed since you ran
   the query makes it decline rather than mislabel a column. Temp-table columns and expressions
-  still get no link, and a bare `*` needs a single-table query. The status bar says "resolved
+  still get no link. A bare `*` over a join works too — SQL Server expands it table by table in
+  FROM order — as long as at most one table in the join is a #temp table, table variable, CTE
+  or subquery (with two, their columns' positions can't be known). The status bar says "resolved
   from the query text".
 - **SSMS's query shortcuts** work too: select a table name, press **Ctrl+3**
   (`SELECT TOP(100) * FROM`), and the grid's columns get source links even though the query SSMS

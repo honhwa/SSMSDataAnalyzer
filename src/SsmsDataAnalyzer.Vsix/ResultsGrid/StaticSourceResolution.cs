@@ -309,6 +309,11 @@ ORDER BY c.column_id;";
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // A #temp table, table variable, CTE or derived table has no catalog entry to read:
+                // it is expanded as a block of unknown width, never loaded (StaticShapeResolver).
+                // Trying to load it would fail and abandon the whole expansion.
+                if (target.IsUnknownWidth) continue;
+
                 var asSource = new StaticColumnSource(
                     null, target.Table.Database, target.Table.Schema, target.Table.Table, null);
                 string key = TableKey(asSource);
