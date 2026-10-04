@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.29.1**
+**`SsmsDataAnalyzer.vsix` — version 0.29.2**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -33,6 +33,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.29.2** — **Aggregate selection is readable in the dark theme.** The popup used the Windows "window" colour (always white) as its background, while its text followed the SSMS theme, so in a dark theme it showed pale gray text on white. It now uses the SSMS tool-window colours, like the other panels. The match counter in Find in Results got the same fix.
 
 **0.29.1** — **Go to source, Peek and pivot links now work on `SELECT *` joined to a #temp table.** A query like `SELECT 'x', * FROM Finances.[T] te JOIN #temp t ...` declined for every column, because a bare `*` was only expanded for single-table queries. It now expands table by table in FROM order (SQL Server's rule): the real table's columns get their links, and the #temp table's columns simply get none. Every linked column is still checked against its header in the grid, and with two #temp-like tables in one join it still declines, since their positions can't be known.
 

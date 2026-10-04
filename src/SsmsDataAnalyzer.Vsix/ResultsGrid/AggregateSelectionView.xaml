@@ -6,14 +6,15 @@
              xmlns:vsp="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
              mc:Ignorable="d"
              d:DesignHeight="260" d:DesignWidth="360"
-             Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+             Background="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+             Foreground="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowTextBrushKey}}">
 
     <UserControl.Resources>
         <!-- Same "solid VS theme colour, never a hardcoded one" convention as
              Pivot/PivotView.xaml — only EXISTING EnvironmentColors keys. -->
         <SolidColorBrush x:Key="ContextTextBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextColorKey}}" />
         <SolidColorBrush x:Key="RowHoverBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemHighlightColorKey}}" Opacity="0.15" />
-        <SolidColorBrush x:Key="ValueTextBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.SystemWindowTextColorKey}}" />
+        <SolidColorBrush x:Key="ValueTextBrush" Color="{DynamicResource {x:Static vsp:EnvironmentColors.ToolWindowTextColorKey}}" />
         <!-- v0.15.2 field feedback ("some lines between"): hairline dividers at low opacity, the
              usual key/value-table treatment — they separate rows without competing with the
              numbers. Same gray as the pivot's grid lines. -->

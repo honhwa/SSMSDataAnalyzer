@@ -81,7 +81,7 @@
                 ToolTip="Search (Enter)" Padding="8,2" VerticalAlignment="Center" Margin="0,0,8,0" />
         <TextBlock x:Name="CounterText" Grid.Column="2" VerticalAlignment="Center"
                    MinWidth="90" Margin="0,0,8,0"
-                   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+                   Foreground="{DynamicResource {x:Static vsp:EnvironmentColors.SystemGrayTextBrushKey}}" />
         <Button x:Name="PreviousButton" Grid.Column="3" Content="Previous" Click="PreviousButton_Click"
                 ToolTip="Previous match (Shift+F3 / Shift+Enter)" Padding="8,2" VerticalAlignment="Center" Margin="0,0,4,0" />
         <Button x:Name="NextButton" Grid.Column="4" Content="Next" Click="NextButton_Click"
