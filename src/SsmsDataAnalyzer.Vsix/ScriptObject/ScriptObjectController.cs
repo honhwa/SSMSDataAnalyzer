@@ -357,7 +357,7 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
 
         /// <summary>The active document's SQL editor control and its active WPF text view, or null
         /// when the active document is not a SQL query window.</summary>
-        private static SqlScriptEditorControl TryGetActiveSqlEditor(out IWpfTextView view, out Document document)
+        internal static SqlScriptEditorControl TryGetActiveSqlEditor(out IWpfTextView view, out Document document)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             view = null;
@@ -387,7 +387,7 @@ namespace SsmsDataAnalyzer.Vsix.ScriptObject
         /// m_connection.Database while the connection is open (IL, docs/script-object-api.md).
         /// Falls back to the connection's initial database.
         /// </summary>
-        private static string GetCurrentDatabase(SqlScriptEditorControl editor, UIConnectionInfo connectionInfo)
+        internal static string GetCurrentDatabase(SqlScriptEditorControl editor, UIConnectionInfo connectionInfo)
         {
             try
             {

@@ -141,6 +141,7 @@ namespace SsmsDataAnalyzer.Vsix
             // "Script object": F12 (ALTER into a new query window) and Ctrl+click (CREATE popup)
             // in SQL query windows. Same UI-thread context as Register.
             ScriptObject.ScriptObjectController.Initialize(this, commandService);
+            QueryEditor.AnalyzeTableAtCaretCommand.Initialize(this, commandService);
 
             // Remember the text each query window actually executed, so Go to source and pivot
             // FK links describe what produced the grid, not whatever the editor holds by the
@@ -885,6 +886,58 @@ namespace SsmsDataAnalyzer.Vsix
         }
 
         /// <summary>
+        /// Opens (or brings forward) the Analyze Data window and returns its ViewModel, or null
+        /// when it cannot be reached (already logged). Shared by Object Explorer's right-click
+        /// and the query editor's "Analyze Data...", so both report into the window the same way.
+        /// </summary>
+        internal async System.Threading.Tasks.Task<ProfileViewModel> ShowProfileWindowAsync()
+        {
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            // v0.5.2 field report ("no more work" — a right-click that visibly did
+            // nothing, window left on its default empty state): open/resolve the
+            // ViewModel FIRST, before anything that can fail (parsing the node, building
+            // a connection string) — so every failure past this point has somewhere to
+            // report to (ReportObjectExplorerFailure), rather than only the ActivityLog.
+            // The one thing that genuinely CANNOT be reported into the window is failing
+            // to resolve the ViewModel itself — there is nothing to write into.
+            WindowPane pane;
+            try
+            {
+                pane = await ShowToolWindowAsync(typeof(ProfileToolWindow), 0, true, DisposalToken)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                OeDiagnostics.Error("'Analyze Data' failed to open/show the tool window", ex);
+                return null;
+            }
+
+            var viewModel = TryResolveViewModel(pane, out string resolutionPath);
+            if (viewModel == null)
+            {
+                // CONTRACT.md Amendment 13 hardening: this is exactly the failure mode the
+                // lead flagged as indistinguishable from "nothing happened" — the window is
+                // already visible (ShowToolWindowAsync succeeded) but we could not reach its
+                // ViewModel to tell it anything. We cannot write a status into a ViewModel we
+                // do not have, so this is the practical limit of what we can surface from
+                // here; logged loudly (not just Warn) so it stops looking identical to "OE
+                // never fired" in the ActivityLog.
+                OeDiagnostics.Error($"'Analyze Data' opened the tool window but could not resolve its ViewModel through any known path ({resolutionPath}) — the window is visible but nothing can be shown in it. This means ShowToolWindowAsync returned a pane whose Content/DataContext shape did not match ProfileToolWindow's own construction, which should not be possible — report this exact log line.");
+                return null;
+            }
+            if (resolutionPath != "ProfileToolWindow.ViewModel")
+            {
+                // The primary path (pane as ProfileToolWindow -> .ViewModel) failed and a
+                // fallback caught it. That should never happen either — worth knowing about
+                // even though we recovered.
+                OeDiagnostics.Warn($"'Analyze Data' resolved the ViewModel via fallback path '{resolutionPath}' instead of the primary ProfileToolWindow.ViewModel accessor — recovered, but this indicates the pane was not a plain ProfileToolWindow with our own Content, which is unexpected.");
+            }
+
+            return viewModel;
+        }
+
+        /// <summary>
         /// Invoked (via AnalyzeMenuHandler's click handler) when the user picks "Analyze
         /// Data..." on a table node. Reuses the node's own connection when possible
         /// (CONTRACT.md Amendment 13, Priority 1); when it can't be reused automatically
@@ -897,45 +950,8 @@ namespace SsmsDataAnalyzer.Vsix
             {
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                // v0.5.2 field report ("no more work" — a right-click that visibly did
-                // nothing, window left on its default empty state): open/resolve the
-                // ViewModel FIRST, before anything that can fail (parsing the node, building
-                // a connection string) — so every failure past this point has somewhere to
-                // report to (ReportObjectExplorerFailure), rather than only the ActivityLog.
-                // The one thing that genuinely CANNOT be reported into the window is failing
-                // to resolve the ViewModel itself — there is nothing to write into.
-                WindowPane pane;
-                try
-                {
-                    pane = await ShowToolWindowAsync(typeof(ProfileToolWindow), 0, true, DisposalToken)
-                        .ConfigureAwait(true);
-                }
-                catch (Exception ex)
-                {
-                    OeDiagnostics.Error("'Analyze Data' failed to open/show the tool window", ex);
-                    return;
-                }
-
-                var viewModel = TryResolveViewModel(pane, out string resolutionPath);
-                if (viewModel == null)
-                {
-                    // CONTRACT.md Amendment 13 hardening: this is exactly the failure mode the
-                    // lead flagged as indistinguishable from "nothing happened" — the window is
-                    // already visible (ShowToolWindowAsync succeeded) but we could not reach its
-                    // ViewModel to tell it anything. We cannot write a status into a ViewModel we
-                    // do not have, so this is the practical limit of what we can surface from
-                    // here; logged loudly (not just Warn) so it stops looking identical to "OE
-                    // never fired" in the ActivityLog.
-                    OeDiagnostics.Error($"'Analyze Data' opened the tool window but could not resolve its ViewModel through any known path ({resolutionPath}) — the window is visible but nothing can be shown in it. This means ShowToolWindowAsync returned a pane whose Content/DataContext shape did not match ProfileToolWindow's own construction, which should not be possible — report this exact log line.");
-                    return;
-                }
-                if (resolutionPath != "ProfileToolWindow.ViewModel")
-                {
-                    // The primary path (pane as ProfileToolWindow -> .ViewModel) failed and a
-                    // fallback caught it. That should never happen either — worth knowing about
-                    // even though we recovered.
-                    OeDiagnostics.Warn($"'Analyze Data' resolved the ViewModel via fallback path '{resolutionPath}' instead of the primary ProfileToolWindow.ViewModel accessor — recovered, but this indicates the pane was not a plain ProfileToolWindow with our own Content, which is unexpected.");
-                }
+                var viewModel = await ShowProfileWindowAsync();
+                if (viewModel == null) return;
 
                 try
                 {

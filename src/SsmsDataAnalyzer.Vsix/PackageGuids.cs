@@ -114,6 +114,11 @@ namespace SsmsDataAnalyzer.Vsix
         /// context-menu group as the paste commands, plus a Tools-menu CommandPlacement.</summary>
         public const int ScriptObjectAsAlterCommandId = 0x0302;
 
+        /// <summary>"Analyze Data..." on the query editor's right-click menu: profiles the table
+        /// under the caret on the query window's own connection, so the table does not have to be
+        /// found in Object Explorer first. See QueryEditor\AnalyzeTableAtCaretCommand.cs.</summary>
+        public const int AnalyzeTableAtCaretCommandId = 0x0303;
+
         /// <summary>docs/query-history-plan.md §8.7 (lead-assigned, do not change) --
         /// "Query History…" on the Tools menu, CanonicalName "SsmsDataAnalyzer.QueryHistory".</summary>
         public const int QueryHistoryCommandId = 0x0400;

@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.29.3**
+**`SsmsDataAnalyzer.vsix` — version 0.30.0**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -22,7 +22,7 @@ why.
 
 | Feature | Where to find it |
 |---|---|
-| Analyze a table | Object Explorer → right-click a table → **Analyze Data…** |
+| Analyze a table | Object Explorer → right-click a table → **Analyze Data…**, or right-click a table name in a query window |
 | Search the analysis results | Click the panel → **Ctrl+F** |
 | Search inside query results | Right-click the results grid → **Find…** |
 | Jump to a linked record | Right-click a cell or column → **Go to source…** |
@@ -33,6 +33,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.30.0** — New: **Analyze Data from a query window.** Click on a table name in your query (or select it), then right-click → **Analyze Data…** or press **Ctrl+Alt+Q, T**. There is no need to find the table in Object Explorer. It uses the query window's own connection and current database. Bracketed, schema-qualified and three-part names work. A view, a procedure, a #temp table or a name that doesn't exist is reported instead of attempted. The new shortcut follows the usual rule: it is added only if you haven't bound that command yourself and nothing else uses the key.
 
 **0.29.3** — **Peek: Backspace and Alt+Left go back again after following a link.** Alt+Left was never recognised: with Alt held, WPF reports a different key code, and the check did not account for it. Backspace stopped working one level deeper because loading the next record rebuilt the grid and left keyboard focus nowhere in the window. The peek window now puts focus back on the grid after every record it shows. The Back button already worked.
 

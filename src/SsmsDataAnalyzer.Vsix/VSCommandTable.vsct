@@ -204,6 +204,25 @@
         reason. Statically visible instead: clicking loads the package on demand, and Execute
         still degrades with a status-bar message if there is no text document to paste into.
       -->
+      <!--
+        "Analyze Data..." for the table under the caret (or at the start of the selection), on the
+        query window's own connection: the same profile Object Explorer's right-click opens,
+        without having to find the table in the tree first. Statically visible for the same
+        cold-session reason as the commands below; Execute explains on the status bar when the
+        caret is not on a table. See QueryEditor\AnalyzeTableAtCaretCommand.cs.
+      -->
+      <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidAnalyzeTableAtCaret" priority="0x0090" type="Button">
+        <Parent guid="guidSsmsDataAnalyzerCommandSet" id="QueryEditorMenuGroup" />
+        <Icon guid="guidImageCatalog" id="imgDataTable" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Analyze Data...</ButtonText>
+          <CanonicalName>SsmsDataAnalyzer.AnalyzeTableAtCaret</CanonicalName>
+          <LocCanonicalName>SsmsDataAnalyzer.AnalyzeTableAtCaret</LocCanonicalName>
+          <ToolTipText>Analyze the data of the table under the caret, on this query window's connection.</ToolTipText>
+        </Strings>
+      </Button>
+
       <Button guid="guidSsmsDataAnalyzerCommandSet" id="cmdidPasteAsSqlIn" priority="0x0100" type="Button">
         <Parent guid="guidSsmsDataAnalyzerCommandSet" id="QueryEditorMenuGroup" />
         <Strings>
@@ -346,6 +365,7 @@
       <IDSymbol name="cmdidPasteAsSqlIn" value="0x0300" />
       <IDSymbol name="cmdidPasteAsNumericSqlIn" value="0x0301" />
       <IDSymbol name="cmdidScriptObjectAsAlter" value="0x0302" />
+      <IDSymbol name="cmdidAnalyzeTableAtCaret" value="0x0303" />
       <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->
       <IDSymbol name="cmdidQueryHistory" value="0x0400" />
       <!-- docs/query-history-plan.md §8.7 (lead-assigned, do not change). -->

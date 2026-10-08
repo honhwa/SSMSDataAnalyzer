@@ -23,7 +23,7 @@ under your cursor with **F12** or **Ctrl+click**.
 
 | What | Where to click |
 |---|---|
-| **Analyze a table** — fill rates, distinct counts, last-fill dates | Object Explorer → right-click a table → **Analyze Data…** |
+| **Analyze a table** — fill rates, distinct counts, last-fill dates | Object Explorer → right-click a table → **Analyze Data…**, or in a query window right-click a table name → **Analyze Data…** |
 | **Search the analysis** | Click the Analyze Data panel → **Ctrl+F** |
 | **Search query results** | Right-click the results grid → **Find…** |
 | **Jump to a linked record** | Right-click a cell in the results grid → **Go to source for this value** |
@@ -84,6 +84,11 @@ The current version and what changed in each one are listed in
 
 **Where:** Object Explorer (the tree on the left) → expand your database → **Tables** →
 **right-click any table** → **Analyze Data…**
+
+Or, without leaving your query: in a query window, click on a table name (or select it) and
+right-click → **Analyze Data…**, or press **Ctrl+Alt+Q, T**. Bracketed, schema-qualified and
+three-part names all work. It uses that query window's connection and current database; if the
+name is a view, a procedure or doesn't exist, the panel says so instead of guessing.
 
 It uses the connection you're already signed in with — no passwords to re-enter.
 
@@ -589,6 +594,7 @@ Everything has a shortcut out of the box. They all start with the same chord —
 | **Ctrl+Alt+Q**, then **V** | **Pivot** the selected rows |
 | **Ctrl+Alt+Q**, then **A** | **Aggregate** the selected cells |
 | **Ctrl+Alt+Q**, then **D** | **Analyze Data** for the table selected in Object Explorer |
+| **Ctrl+Alt+Q**, then **T** | **Analyze Data** for the table name under the cursor in a query window |
 | **Ctrl+Alt+Q**, then **I** | **Paste as SQL IN (...)** |
 | **Ctrl+Alt+Q**, then **N** | **Paste as numeric SQL IN (...)** |
 | **Ctrl+Alt+Q**, then **S** | **Script object as ALTER** (same as F12) |
@@ -637,6 +643,7 @@ SSMS warns you if the key is already used, which is the check this extension can
 | Pivot selected rows… | `SsmsDataAnalyzer.PivotRows` |
 | Aggregate selection… | `SsmsDataAnalyzer.AggregateSelection` — uses the cells selected in the results grid |
 | Analyze Data… | `SsmsDataAnalyzer.AnalyzeData` — uses the table selected in Object Explorer |
+| Analyze Data… (query window) | `SsmsDataAnalyzer.AnalyzeTableAtCaret` — uses the table name at the cursor |
 | Paste as SQL IN (...) | `SsmsDataAnalyzer.PasteAsSqlIn` |
 | Paste as numeric SQL IN (...) | `SsmsDataAnalyzer.PasteAsNumericSqlIn` |
 | Script object as ALTER | `SsmsDataAnalyzer.ScriptObjectAsAlter` — **F12** in query windows; uses the name at the cursor |

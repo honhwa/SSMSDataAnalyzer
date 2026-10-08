@@ -88,6 +88,10 @@ namespace SsmsDataAnalyzer.Vsix.Commands
             // docs/source-control-sync-plan.md §13.9 -- first command added since the
             // original ten; exercises the per-command "offered" tracking above for real.
             ("SsmsDataAnalyzer.CheckSourceControl",   "Global::Ctrl+Alt+Q, C"),
+
+            // "Analyze Data..." for the table under the caret in a query window. T for table:
+            // D stays the Tools-menu Analyze Data, which only opens the window.
+            ("SsmsDataAnalyzer.AnalyzeTableAtCaret",  "Global::Ctrl+Alt+Q, T"),
         };
 
         /// <summary>Scanning every command in the shell to find which keys are taken is the
