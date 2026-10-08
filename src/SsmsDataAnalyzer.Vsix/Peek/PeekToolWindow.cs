@@ -113,9 +113,12 @@ namespace SsmsDataAnalyzer.Vsix.Peek
             // Backspace and Alt+Left both go back, the two keys people already try. Neither is
             // claimed while a text box has focus (the column filter), where Backspace must
             // still delete a character.
+            // With Alt held, WPF reports the key as Key.System and the real key in SystemKey,
+            // so testing e.Key == Key.Left alone never matched Alt+Left.
             bool typing = Keyboard.FocusedElement is System.Windows.Controls.TextBox;
-            if (!typing && (e.Key == Key.Back
-                || (e.Key == Key.Left && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)))
+            Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (!typing && (key == Key.Back
+                || (key == Key.Left && (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)))
             {
                 e.Handled = true;
                 GoBack();
@@ -187,6 +190,7 @@ namespace SsmsDataAnalyzer.Vsix.Peek
             Caption = state.Caption;
             _view.Bind(state.Result, state.FkLinks, state.Banner);
             _view.SetBackAvailable(_history.Count > 0);
+            _view.FocusGridAfterLayout();
         }
 
         private void CloseWindow()

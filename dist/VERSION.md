@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.29.2**
+**`SsmsDataAnalyzer.vsix` — version 0.29.3**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -33,6 +33,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.29.3** — **Peek: Backspace and Alt+Left go back again after following a link.** Alt+Left was never recognised: with Alt held, WPF reports a different key code, and the check did not account for it. Backspace stopped working one level deeper because loading the next record rebuilt the grid and left keyboard focus nowhere in the window. The peek window now puts focus back on the grid after every record it shows. The Back button already worked.
 
 **0.29.2** — **Aggregate selection is readable in the dark theme.** The popup used the Windows "window" colour (always white) as its background, while its text followed the SSMS theme, so in a dark theme it showed pale gray text on white. It now uses the SSMS tool-window colours, like the other panels. The match counter in Find in Results got the same fix.
 

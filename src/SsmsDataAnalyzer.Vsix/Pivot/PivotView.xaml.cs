@@ -71,6 +71,39 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
         private void BackButton_Click(object sender, System.Windows.RoutedEventArgs e) =>
             BackRequested?.Invoke(this, EventArgs.Empty);
 
+        /// <summary>
+        /// Puts keyboard focus back on the grid once the new record has been laid out. Loading
+        /// a record rebuilds the grid's columns, which destroys the element that had focus (the
+        /// link icon just clicked, or a Back button that has just become disabled). Focus then
+        /// belongs to nothing inside this window, so Backspace and Alt+Left never reach it:
+        /// field report, "Back works by clicking, the keys do nothing one level deeper".
+        /// </summary>
+        internal void FocusGridAfterLayout()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                // Yield below layout priority, so the rebuilt columns and rows exist.
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                if (!IsVisible) return;
+                if (Keyboard.FocusedElement is DependencyObject focused && IsAncestorOf(focused) && focused != BackButton)
+                    return; // already somewhere sensible inside this window, e.g. the filter box
+
+                if (PivotGrid.Items.Count > 0)
+                {
+                    if (PivotGrid.CurrentCell.Column == null && PivotGrid.Columns.Count > 0)
+                        PivotGrid.CurrentCell = new DataGridCellInfo(PivotGrid.Items[0], PivotGrid.Columns[PivotGrid.Columns.Count > 1 ? 1 : 0]);
+                    PivotGrid.Focus();
+                }
+                else
+                {
+                    Focus();
+                }
+            }).FileAndForget("SsmsDataAnalyzer/Peek/FocusGrid");
+        }
+
         internal void Bind(PivotResult result)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
