@@ -209,15 +209,13 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             textFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
 
             var glyphFactory = new FrameworkElementFactory(typeof(TextBlock));
-            // The "go to source" icon (docs/pivot-plan.md §12 / §5 item 5): U+E8A7
-            // "OpenInNewWindow" in Segoe Fluent Icons / Segoe MDL2 Assets, which is what a click
-            // does. v0.12.0 used a right arrow, which at the cell edge read as pointing at the
-            // next column's value (field screenshot, v0.12.1).
-            // "OpenInNewWindow" when a click opens a query tab; a magnifier when it peeks in
-            // place, since promising a new window and then not opening one is worse than no
-            // icon at all. Deliberately not an arrow either way: v0.12.0 used one and at the
-            // cell edge it read as pointing at the NEXT column's value (field screenshot).
-            glyphFactory.SetValue(TextBlock.TextProperty, FollowLinksInPlace ? "\uE721" : "\uE8A7");
+            // The link icon: U+E721 (magnifier) in Segoe Fluent Icons / Segoe MDL2 Assets. Since
+            // 0.30.1 a click PEEKS in both windows (user request) -- from a pivot it opens the
+            // peek window, inside a peek it goes one level deeper -- so it is always the
+            // magnifier; "Go to source..." on the right-click menu is the way to a query tab.
+            // Deliberately not an arrow: v0.12.0 used one and at the cell edge it read as
+            // pointing at the NEXT column's value (field screenshot).
+            glyphFactory.SetValue(TextBlock.TextProperty, "\uE721");
             glyphFactory.SetValue(TextBlock.FontFamilyProperty, FkIconFontFamily);
             glyphFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
             glyphFactory.SetValue(TextBlock.ForegroundProperty, (System.Windows.Media.Brush)FindResource("FkIconBrush"));
@@ -243,7 +241,7 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             {
                 Mode = BindingMode.OneWay,
                 Converter = FkGoTooltipConverter,
-                ConverterParameter = FollowLinksInPlace ? "peek" : null
+                ConverterParameter = FollowLinksInPlace ? "peek-here" : "peek"
             };
             tooltipBinding.Bindings.Add(new Binding("TargetText") { Mode = BindingMode.OneWay });
             tooltipBinding.Bindings.Add(new Binding(valuePath) { Mode = BindingMode.OneWay });
@@ -284,10 +282,9 @@ namespace SsmsDataAnalyzer.Vsix.Pivot
             if (!(sender is FrameworkElement element) || !(element.DataContext is PivotRowItem row) || !(element.Tag is int rowIndex))
                 return;
 
-            if (FollowLinksInPlace)
-                _viewModel.PeekSource(row, rowIndex);
-            else
-                _viewModel.GoToSource(row, rowIndex);
+            // Peek in both windows (user request): from a pivot it opens the peek window, from
+            // a peek window it goes one level deeper in place (PeekToolWindow re-binds itself).
+            _viewModel.PeekSource(row, rowIndex);
         }
 
         /// <summary>§12 keyboard/context-menu alternative: enable "Go to source…" only when the

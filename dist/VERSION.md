@@ -1,6 +1,6 @@
 # Current build
 
-**`SsmsDataAnalyzer.vsix` — version 0.30.0**
+**`SsmsDataAnalyzer.vsix` — version 0.30.1**
 
 Install: download the `.vsix` in this folder, close SSMS, double-click the file, reopen SSMS.
 Full instructions in the [main README](../README.md#installing-it).
@@ -33,6 +33,8 @@ why.
 | Settings | **Tools → Options… → SSMS Data Analyzer** |
 
 ## Version history
+
+**0.30.1** — **The link icon in a pivot now peeks.** Clicking the small icon in a linked pivot cell opens the record in the Peek window, where its own links go deeper and Back walks out again, instead of opening a new query tab. The icon is the same magnifier everywhere. To get a query tab, right-click the cell → **Go to source…**.
 
 **0.30.0** — New: **Analyze Data from a query window.** Click on a table name in your query (or select it), then right-click → **Analyze Data…** or press **Ctrl+Alt+Q, T**. There is no need to find the table in Object Explorer. It uses the query window's own connection and current database. Bracketed, schema-qualified and three-part names work. A view, a procedure, a #temp table or a name that doesn't exist is reported instead of attempted. The new shortcut follows the usual rule: it is added only if you haven't bound that command yourself and nothing else uses the key.
 

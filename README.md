@@ -174,7 +174,7 @@ for you, already filtered to the matching record.
 |---|---|
 | **Query results** | Right-click a cell containing an ID → **Go to source for this value** |
 | **The Analyze Data panel** | Right-click a column's row → **Go to source table**, or right-click its **Min** / **Max** cell → **Go to source for this value** |
-| **A pivot window** | Click the small icon inside a linked cell (see [Feature 4](#feature-4--compare-rows-side-by-side-pivot)) |
+| **A pivot window** | Right-click a linked cell → **Go to source…** (the small icon in the cell peeks instead; see below) |
 
 A new query tab opens, connected with your current sign-in and **already run**, showing the
 record. (To review the query before it runs, turn off *Automatically execute the generated
@@ -183,13 +183,12 @@ query* in [Settings](#settings).)
 **Just want a quick look, not a new tab?** Right-click the same cell and pick **Peek source for
 this value** instead. It shows the referenced record in a small floating window right away —
 no new query tab, nothing to clean up. Close it with **Esc** or its own **X** the moment you've
-seen what you needed. In a pivot window, the equivalent is **Peek source…** on a linked cell's
-right-click menu. Either way, if the peeked record itself has a linked column, the 🔗 icon
+seen what you needed. In a pivot window, just click the small 🔍 icon inside a linked cell
+(or right-click it → **Peek source…**). Either way, if the peeked record itself has a linked column, the 🔍 icon
 inside the peek window works too: clicking it follows the link **in the same window**, one level
 deeper, and **← Back** (or **Alt+Left**, or **Backspace**) walks back out again. So you can
 explore a chain of foreign keys without opening a single query tab, and without losing your way.
-The icon is a magnifier there rather than the "open in new window" one, because that is what it
-does. If you do want a query tab, right-click the cell → **Go to source…**.
+If you do want a query tab, right-click the cell → **Go to source…**.
 
 Go to source and Peek source are just two ways to look at the same result — picking one never
 changes what the other does.
@@ -273,7 +272,7 @@ selected.
 | **Hide all-NULL columns** | Hides columns that are empty in every row |
 | **Filter** | Narrows columns by name |
 | **Header** | Label each row by a column's value (e.g. `ID = 4522`) instead of `Row 7` |
-| **🔗 and ⧉** | Foreign-key column; in a pivot, click ⧉ in a cell to open the linked record ([Feature 3](#feature-3--jump-to-a-linked-record-go-to-source)). Hover it to see where it goes. Right-click a cell → **Go to source…** does the same, or **Peek source…** to see it in a small closable window without leaving the pivot. |
+| **🔗 and 🔍** | Foreign-key column; in a pivot, click 🔍 in a cell to **peek** at the linked record in a small closable window without leaving the pivot ([Feature 3](#feature-3--jump-to-a-linked-record-go-to-source)). Hover it to see where it goes. Right-click a cell → **Go to source…** opens it in a new query tab instead. |
 | **Ctrl+C** / **Ctrl+A** | Copy selected cells (pastes into Excel) / select all |
 | **Right-click → Copy as Markdown table** | Copies what's currently shown, for Jira or Confluence |
 
@@ -287,7 +286,7 @@ Each pivot opens in **its own tab** (Pivot 1, Pivot 2, …), so you can keep sev
   refresh. It keeps working even after you close the query tab.
 - **Values are exactly what the grid shows** — very long text is cut off the same way, and a
   real `NULL` looks the same as the text `NULL`.
-- If no ⧉ icons appear, the line under the banner says why (for example, the query couldn't be
+- If no 🔍 icons appear, the line under the banner says why (for example, the query couldn't be
   matched to its tables).
 
 ---
